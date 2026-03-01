@@ -1,31 +1,21 @@
 import React from 'react';
 
-export default function Header({ setModalAdminAberto, setModalResumoAberto, setModalLocalizadorAberto }) {
+export default function Header() {
   return (
-    <header className="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-10 flex justify-between items-center">
-      <h1 className="text-xl font-black italic">BancaFlash ⚡</h1>
+    <header className="bg-white text-gray-800 p-4 shadow-sm z-10 flex justify-between items-center border-b border-gray-200">
+      <div className="flex items-center gap-2">
+        <span className="text-2xl">⚡</span>
+        <h1 className="text-xl font-black italic tracking-tight text-blue-600">BancaFlash</h1>
+      </div>
       
-      <div className="flex gap-2">
-        <button 
-          onClick={() => setModalLocalizadorAberto(true)} 
-          className="bg-blue-800 text-white px-3 py-2 rounded-lg font-bold text-sm shadow flex items-center gap-1 active:scale-95 transition-transform"
-        >
-          <span>🔍</span> Buscar
-        </button>
-        
-        <button 
-          onClick={() => setModalAdminAberto(true)} 
-          className="bg-gray-800 text-white px-3 py-2 rounded-lg font-bold text-sm shadow active:scale-95 transition-transform"
-        >
-          ⚙️
-        </button>
-        
-        <button 
-          onClick={() => setModalResumoAberto(true)} 
-          className="bg-green-500 text-white px-3 py-2 rounded-lg font-bold text-sm shadow flex items-center gap-1 active:scale-95 transition-transform"
-        >
-          <span>📊</span> Resumo
-        </button>
+      <div className="flex items-center gap-3">
+        <div className="text-right hidden sm:block">
+          <p className="text-sm font-bold text-gray-700">Administrador</p>
+          <p className="text-xs text-green-500 font-bold">● Online</p>
+        </div>
+        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-black border-2 border-blue-200">
+          AD
+        </div>
       </div>
     </header>
   );
