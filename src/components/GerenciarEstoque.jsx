@@ -16,8 +16,13 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   const [formCor, setFormCor] = useState({ cor: '', saco: '', meta_banca: 3, meta_global: 6 });
   const [estoques, setEstoques] = useState({});
 
-  // 🪄 O ESTADO MÁGICO DA SANFONA
   const [expandidos, setExpandidos] = useState({});
+
+  // ==========================================
+  // 🪄 NOVOS ESTADOS PARA EDIÇÃO DO PRODUTO INTEIRO
+  // ==========================================
+  const [modalEdicaoMassaAberto, setModalEdicaoMassaAberto] = useState(false);
+  const [formEdicaoMassa, setFormEdicaoMassa] = useState({ nomeAntigo: '', nomeNovo: '', preco: '', preco_atacado: '' });
 
   if (!aberto) return null;
 
@@ -26,7 +31,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
 
   const tamanhosComuns = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', 'G4', 'U'];
 
-  // FUNÇÃO QUE ABRE E FECHA A SANFONA
   const toggleSanfona = (nomeProduto) => {
     setExpandidos(prev => ({ ...prev, [nomeProduto]: !prev[nomeProduto] }));
   };
@@ -53,6 +57,52 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     setPassoAtual(3); 
     setModalPassosAberto(true);
   };
+
+  // ==========================================
+  // 🪄 FUNÇÕES PARA EDITAR/EXCLUIR O PRODUTO INTEIRO
+  // ==========================================
+  const abrirEdicaoMassa = (nomeProduto) => {
+    const variacoes = produtos.filter(p => p.nome === nomeProduto);
+    if (variacoes.length > 0) {
+      setFormEdicaoMassa({
+        nomeAntigo: variacoes[0].nome,
+        nomeNovo: variacoes[0].nome,
+        preco: variacoes[0].preco,
+        preco_atacado: variacoes[0].preco_atacado || variacoes[0].preco
+      });
+      setModalEdicaoMassaAberto(true);
+    }
+  };
+
+  const salvarEdicaoMassa = async () => {
+    if (!formEdicaoMassa.nomeNovo.trim()) {
+      toast.error("O nome não pode ficar vazio!");
+      return;
+    }
+
+    const dadosMassa = {
+      nome: formEdicaoMassa.nomeNovo.trim().toUpperCase(),
+      preco: parseFloat(formEdicaoMassa.preco || 0),
+      preco_atacado: parseFloat(formEdicaoMassa.preco_atacado || 0)
+    };
+
+    // Atualiza TODOS os registros que tem o nome antigo
+    await supabase.from('produtos').update(dadosMassa).eq('nome', formEdicaoMassa.nomeAntigo);
+
+    await buscarProdutos();
+    setModalEdicaoMassaAberto(false);
+    toast.success("Produto atualizado por completo!");
+  };
+
+  const excluirProdutoMassa = async (nomeProduto) => {
+    if (window.confirm(`ATENÇÃO: Você tem certeza que deseja excluir o modelo "${nomeProduto}" INTEIRO? Todas as cores e tamanhos serão apagados!`)) {
+      await supabase.from('produtos').delete().eq('nome', nomeProduto);
+      buscarProdutos();
+      toast.success("Modelo inteiro excluído com sucesso!");
+    }
+  };
+
+  // ==========================================
 
   const toggleTamanho = (tam) => {
     if (tamanhosSelecionados.includes(tam)) {
@@ -132,8 +182,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       });
 
       await supabase.from('produtos').insert(registrosParaSalvar);
-      
-      // Abre a sanfona automaticamente para o produto que acabou de ser criado!
       setExpandidos(prev => ({ ...prev, [formBase.nome.trim().toUpperCase()]: true }));
     }
 
@@ -141,7 +189,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     
     if (fecharModalAposSalvar) {
       setModalPassosAberto(false);
-      toast.success("Produto salvo com sucesso!");
+      toast.success("Salvo com sucesso!");
     } else {
       setFormCor({ cor: '', saco: formCor.saco, meta_banca: 3, meta_global: 6 });
       setEstoques({});
@@ -151,7 +199,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   };
 
   const excluirVariacao = async (id) => {
-    if (window.confirm("Certeza que quer excluir essa variação?")) {
+    if (window.confirm("Certeza que quer excluir essa variação única?")) {
       await supabase.from('produtos').delete().eq('id', id);
       buscarProdutos();
       toast.success("Variação excluída com sucesso!");
@@ -189,19 +237,27 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
             
             return (
               <div key={nome} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
-                {/* CABEÇALHO CLICÁVEL (O BOTÃO DA SANFONA) */}
-                <div 
-                  onClick={() => toggleSanfona(nome)}
-                  className="bg-gray-100 hover:bg-gray-200 p-3 flex justify-between items-center border-b border-gray-200 cursor-pointer select-none transition-colors"
-                >
-                  <div className="flex items-center gap-2">
+                {/* CABEÇALHO CLICÁVEL COM BOTÕES DE EDIÇÃO EM MASSA */}
+                <div className="bg-gray-100 hover:bg-gray-200 p-3 flex justify-between items-center border-b border-gray-200 transition-colors">
+                  
+                  {/* Área que clica para abrir a sanfona */}
+                  <div 
+                    onClick={() => toggleSanfona(nome)}
+                    className="flex items-center gap-2 cursor-pointer select-none flex-1"
+                  >
                     <span className="text-gray-400 font-bold text-xs">{estaExpandido ? '▼' : '▶'}</span>
                     <h3 className="font-black text-gray-800 uppercase tracking-tight">{nome}</h3>
                   </div>
-                  <span className="text-xs font-bold text-gray-500 bg-white border px-2 py-1 rounded-lg shadow-sm">Total: {estoqueTotal} un.</span>
+
+                  {/* Botões do Produto (Paramos a propagação do clique para não abrir/fechar a sanfona) */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500 bg-white border px-2 py-1 rounded-lg shadow-sm hidden md:inline-block">Total: {estoqueTotal} un.</span>
+                    <button onClick={(e) => { e.stopPropagation(); abrirEdicaoMassa(nome); }} className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shadow-sm active:scale-95">✏️</button>
+                    <button onClick={(e) => { e.stopPropagation(); excluirProdutoMassa(nome); }} className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center shadow-sm active:scale-95">🗑️</button>
+                  </div>
+
                 </div>
                 
-                {/* CONTEÚDO DA SANFONA (SÓ MOSTRA SE ESTIVER EXPANDIDO) */}
                 {estaExpandido && (
                   <div className="divide-y divide-gray-100 animate-fade-in bg-white">
                     {variacoes.map(v => (
@@ -216,8 +272,8 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                             <p className="font-black text-gray-700 text-sm">{v.estoque_banca || 0} / {v.estoque_saco || 0}</p>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => abrirEdicaoExistente(v)} className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shadow-sm active:scale-95">✏️</button>
-                            <button onClick={() => excluirVariacao(v.id)} className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center shadow-sm active:scale-95">🗑️</button>
+                            <button onClick={() => abrirEdicaoExistente(v)} className="w-8 h-8 bg-blue-50 text-blue-400 hover:text-blue-600 rounded flex items-center justify-center active:scale-95">✏️</button>
+                            <button onClick={() => excluirVariacao(v.id)} className="w-8 h-8 bg-red-50 text-red-400 hover:text-red-600 rounded flex items-center justify-center active:scale-95">🗑️</button>
                           </div>
                         </div>
                       </div>
@@ -230,9 +286,11 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
         </div>
       </div>
 
+      {/* ========================================================= */}
+      {/* MODAL WIZARD (CRIAR / EDITAR VARIAÇÃO ÚNICA) */}
+      {/* ========================================================= */}
       {modalPassosAberto && (
          <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4" onClick={() => setModalPassosAberto(false)}>
-         {/* O RESTO DO SEU MODAL DE CRIAR PRODUTO CONTINUA INTACTO AQUI... */}
          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
            
            <div className="bg-gray-50 p-4 border-b flex justify-between items-center">
@@ -402,6 +460,63 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
            </div>
          </div>
        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL PARA EDITAR DADOS GERAIS DO PRODUTO (NOME E PREÇO)    */}
+      {/* ========================================================= */}
+      {modalEdicaoMassaAberto && (
+        <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4" onClick={() => setModalEdicaoMassaAberto(false)}>
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b pb-3 mb-4">
+              <h3 className="font-black text-gray-800 flex items-center gap-2">✏️ Editar Modelo Base</h3>
+              <button onClick={() => setModalEdicaoMassaAberto(false)} className="bg-gray-200 text-gray-600 w-8 h-8 rounded-full font-bold">X</button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase">Nome do Modelo</label>
+                <input 
+                  type="text" 
+                  className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold uppercase mt-1 focus:border-blue-500 outline-none" 
+                  value={formEdicaoMassa.nomeNovo} 
+                  onChange={e => setFormEdicaoMassa({...formEdicaoMassa, nomeNovo: e.target.value})} 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase">Preço Varejo</label>
+                  <input 
+                    type="number" 
+                    className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold mt-1 focus:border-blue-500 outline-none" 
+                    value={formEdicaoMassa.preco} 
+                    onChange={e => setFormEdicaoMassa({...formEdicaoMassa, preco: e.target.value})} 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase">Preço Atacado</label>
+                  <input 
+                    type="number" 
+                    className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold mt-1 focus:border-blue-500 outline-none" 
+                    value={formEdicaoMassa.preco_atacado} 
+                    onChange={e => setFormEdicaoMassa({...formEdicaoMassa, preco_atacado: e.target.value})} 
+                  />
+                </div>
+              </div>
+
+              <div className="bg-blue-50 p-3 rounded-lg text-xs font-bold text-blue-800 mt-2 text-center">
+                Isso vai alterar os preços e o nome de <br/>TODAS as cores e tamanhos de uma vez!
+              </div>
+
+              <button 
+                onClick={salvarEdicaoMassa} 
+                className="w-full bg-blue-600 text-white font-black py-4 rounded-xl mt-2 active:scale-95"
+              >
+                SALVAR ALTERAÇÕES
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       
     </div>
