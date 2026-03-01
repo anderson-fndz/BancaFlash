@@ -6,52 +6,97 @@ export default function DashboardBI() {
   const [periodo, setPeriodo] = useState('7dias'); 
   const [carregando, setCarregando] = useState(false);
   
-  const [kpis, setKpis] = useState({ faturamento: 0, pecas: 0, ticketMedio: 0, totalPedidos: 0 });
+  // KPI atualizado com o lucroBruto
+  const [kpis, setKpis] = useState({ faturamento: 0, pecas: 0, ticketMedio: 0, totalPedidos: 0, lucroBruto: 0 });
   
   const [dadosGraficoLinha, setDadosGraficoLinha] = useState([]); 
   const [dadosGraficoSemana, setDadosGraficoSemana] = useState([]); 
   const [dadosGraficoProdutos, setDadosGraficoProdutos] = useState([]); 
 
+  // Novos estados para o Filtro de Sócios (Produtos) e Custos
+  const [todasVendas, setTodasVendas] = useState([]);
+  const [produtosRef, setProdutosRef] = useState([]);
+  const [nomesVendidos, setNomesVendidos] = useState([]);
+  const [filtroProdutos, setFiltroProdutos] = useState([]); // Guarda os produtos selecionados
+
   const CORES = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#9333ea', '#0891b2'];
+
+  const getDataCorte = () => {
+    let dataCorte = new Date();
+    dataCorte.setHours(0, 0, 0, 0);
+    if (periodo === '7dias') dataCorte.setDate(dataCorte.getDate() - 6);
+    else if (periodo === '30dias') dataCorte.setDate(dataCorte.getDate() - 29);
+    else if (periodo === 'mes') dataCorte.setDate(1); 
+    return dataCorte;
+  };
 
   useEffect(() => {
     buscarDadosBI();
   }, [periodo]);
 
+  // Sempre que as vendas ou o filtro de produtos mudar, reprocessa os gráficos!
+  useEffect(() => {
+    if (todasVendas.length >= 0) {
+      processarDados(todasVendas, produtosRef);
+    }
+  }, [todasVendas, produtosRef, filtroProdutos, periodo]);
+
   const buscarDadosBI = async () => {
     setCarregando(true);
-    let dataCorte = new Date();
-    dataCorte.setHours(0, 0, 0, 0);
+    const dataCorte = getDataCorte();
 
-    if (periodo === 'hoje') {
-      // Deixa dataCorte como hoje 00:00
-    } else if (periodo === '7dias') {
-      dataCorte.setDate(dataCorte.getDate() - 6);
-    } else if (periodo === '30dias') {
-      dataCorte.setDate(dataCorte.getDate() - 29);
-    } else if (periodo === 'mes') {
-      dataCorte.setDate(1); 
+    // Busca vendas E produtos (para sabermos os custos) ao mesmo tempo
+    const [resVendas, resProd] = await Promise.all([
+      supabase.from('vendas').select('*').gte('created_at', dataCorte.toISOString()).order('created_at', { ascending: true }),
+      supabase.from('produtos').select('nome, custo')
+    ]);
+
+    if (!resVendas.error && resVendas.data) {
+      setTodasVendas(resVendas.data);
+      // Pega os nomes únicos para os botões de filtro
+      const unicos = [...new Set(resVendas.data.map(v => v.produto_nome))];
+      setNomesVendidos(unicos);
+    }
+    
+    if (!resProd.error && resProd.data) {
+      setProdutosRef(resProd.data);
     }
 
-    const { data, error } = await supabase
-      .from('vendas')
-      .select('*')
-      .gte('created_at', dataCorte.toISOString())
-      .order('created_at', { ascending: true });
-
-    if (!error && data) processarDados(data, dataCorte);
     setCarregando(false);
   };
 
-  const processarDados = (vendas, dataCorte) => {
-    // KPIs
-    const totalGrana = vendas.reduce((acc, v) => acc + parseFloat(v.total_item), 0);
-    const totalPecas = vendas.reduce((acc, v) => acc + parseInt(v.quantidade), 0);
+  const processarDados = (vendasIniciais, produtosBase) => {
+    const dataCorte = getDataCorte();
+
+    // 🎯 APLICA O FILTRO DE PRODUTOS ANTES DE GERAR OS GRÁFICOS
+    const vendas = filtroProdutos.length === 0 
+      ? vendasIniciais 
+      : vendasIniciais.filter(v => filtroProdutos.includes(v.produto_nome));
+
+    // KPIs & CÁLCULO DE CUSTO/LUCRO
+    let totalGrana = 0;
+    let totalPecas = 0;
+    let custoTotal = 0;
+
+    vendas.forEach(v => {
+      const valor = parseFloat(v.total_item);
+      const qtd = parseInt(v.quantidade);
+      totalGrana += valor;
+      totalPecas += qtd;
+
+      // Acha o custo da peça na tabela de referência
+      const prod = produtosBase.find(p => p.nome === v.produto_nome);
+      const custoUn = prod && prod.custo ? parseFloat(prod.custo) : 0;
+      custoTotal += (custoUn * qtd);
+    });
+
+    const lucroBruto = totalGrana - custoTotal;
     const pedidosUnicos = new Set(vendas.map(v => v.transacao_id)).size;
     const ticketMedio = pedidosUnicos > 0 ? totalGrana / pedidosUnicos : 0;
-    setKpis({ faturamento: totalGrana, pecas: totalPecas, ticketMedio, totalPedidos: pedidosUnicos });
+    
+    setKpis({ faturamento: totalGrana, pecas: totalPecas, ticketMedio, totalPedidos: pedidosUnicos, lucroBruto });
 
-    // GRÁFICO DE LINHA
+    // GRÁFICO DE LINHA (Seu código original mantido intacto)
     let baseLinha = {};
     if (periodo === 'hoje') {
       for(let i = 0; i <= 23; i++) {
@@ -80,7 +125,7 @@ export default function DashboardBI() {
     const dadosLinha = Object.keys(baseLinha).map(chave => ({ tempo: chave, Vendas: parseFloat(baseLinha[chave].toFixed(2)) }));
     setDadosGraficoLinha(dadosLinha);
 
-    // GRÁFICO DE BARRAS (SEMANA)
+    // GRÁFICO DE BARRAS (SEMANA) (Seu código original mantido intacto)
     const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
     let baseBarra = { 'Dom': 0, 'Seg': 0, 'Ter': 0, 'Qua': 0, 'Qui': 0, 'Sex': 0, 'Sáb': 0 };
     vendas.forEach(v => {
@@ -90,7 +135,7 @@ export default function DashboardBI() {
     const graficoSemana = diasSemana.map(dia => ({ dia: dia, Faturamento: parseFloat(baseBarra[dia].toFixed(2)) }));
     setDadosGraficoSemana(graficoSemana);
 
-    // GRÁFICO DE PIZZA (PRODUTOS)
+    // GRÁFICO DE PIZZA (PRODUTOS) (Seu código original mantido intacto)
     const agrupadoPorProduto = vendas.reduce((acc, v) => {
       if (!acc[v.produto_nome]) acc[v.produto_nome] = 0;
       acc[v.produto_nome] += parseInt(v.quantidade);
@@ -109,13 +154,21 @@ export default function DashboardBI() {
     setDadosGraficoProdutos(graficoProdutos);
   };
 
+  const toggleFiltroProduto = (nome) => {
+    if (filtroProdutos.includes(nome)) {
+      setFiltroProdutos(filtroProdutos.filter(n => n !== nome));
+    } else {
+      setFiltroProdutos([...filtroProdutos, nome]);
+    }
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto p-3 md:p-8 animate-fade-in pb-24 md:pb-8">
       
       <div className="flex justify-between items-center mb-5 md:mb-6 border-b border-gray-200 pb-3 md:pb-4">
         <div>
           <h2 className="text-2xl md:text-3xl font-black text-gray-800">Visão Geral</h2>
-          <p className="text-sm md:text-base text-gray-500 font-bold mt-1">Acompanhe o desempenho da sua banca.</p>
+          <p className="text-sm md:text-base text-gray-500 font-bold mt-1">Acompanhe o desempenho e lucro da sua banca.</p>
         </div>
       </div>
 
@@ -126,28 +179,63 @@ export default function DashboardBI() {
         <button onClick={() => setPeriodo('30dias')} className={`flex-1 min-w-[70px] py-2 md:py-3 font-bold rounded-lg text-xs md:text-sm transition-colors ${periodo === '30dias' ? 'bg-purple-600 text-white shadow' : 'text-gray-500 hover:bg-gray-100'}`}>30 Dias</button>
       </div>
 
+      {/* NOVO FILTRO DE PRODUTOS / SÓCIOS */}
+      {!carregando && nomesVendidos.length > 0 && (
+        <div className="mb-6 animate-fade-in">
+          <h3 className="text-[10px] md:text-xs font-black text-gray-400 uppercase mb-2 md:mb-3 tracking-wider">🎯 Filtrar Desempenho (Cálculo p/ Sócios)</h3>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setFiltroProdutos([])}
+              className={`px-3 py-1.5 md:px-4 md:py-2 rounded-full font-bold text-[10px] md:text-xs border-2 transition-all ${filtroProdutos.length === 0 ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+            >
+              Mostrar Todos
+            </button>
+            {nomesVendidos.map(nome => (
+              <button
+                key={nome}
+                onClick={() => toggleFiltroProduto(nome)}
+                className={`px-3 py-1.5 md:px-4 md:py-2 rounded-full font-bold text-[10px] md:text-xs border-2 transition-all ${filtroProdutos.includes(nome) ? 'bg-purple-100 text-purple-700 border-purple-400 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-purple-200'}`}
+              >
+                {nome}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {carregando ? (
         <div className="flex-1 flex items-center justify-center font-bold text-purple-600 text-lg md:text-xl py-20">Processando métricas... ⏳</div>
       ) : (
         <div className="space-y-4 md:space-y-6">
           
-          {/* CARDS MACRO (Ajustado os textos para mobile) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {/* CARDS MACRO (Agora com 5 Cards, incluindo o Lucro Bruto destacado) */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+            
             <div className="bg-white p-4 md:p-5 rounded-2xl border shadow-sm flex flex-col justify-center">
               <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Faturamento</p>
-              <p className="text-xl md:text-3xl font-black text-green-600 truncate">R$ {kpis.faturamento.toFixed(2)}</p>
+              <p className="text-xl md:text-2xl lg:text-3xl font-black text-gray-800 truncate">R$ {kpis.faturamento.toFixed(2)}</p>
             </div>
+
+            {/* CARD DE LUCRO BRUTO */}
+            <div className="bg-green-50 p-4 md:p-5 rounded-2xl border border-green-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-green-500"></div>
+              <p className="text-[10px] md:text-xs font-bold text-green-700 uppercase tracking-wider mb-1">Lucro Bruto</p>
+              <p className="text-xl md:text-2xl lg:text-3xl font-black text-green-700 truncate">R$ {kpis.lucroBruto.toFixed(2)}</p>
+            </div>
+
             <div className="bg-white p-4 md:p-5 rounded-2xl border shadow-sm flex flex-col justify-center">
               <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Ticket Médio</p>
-              <p className="text-xl md:text-3xl font-black text-blue-600 truncate">R$ {kpis.ticketMedio.toFixed(2)}</p>
+              <p className="text-xl md:text-2xl lg:text-3xl font-black text-blue-600 truncate">R$ {kpis.ticketMedio.toFixed(2)}</p>
             </div>
+            
             <div className="bg-white p-4 md:p-5 rounded-2xl border shadow-sm flex flex-col justify-center">
               <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Peças</p>
-              <p className="text-xl md:text-3xl font-black text-gray-800">{kpis.pecas} un.</p>
+              <p className="text-xl md:text-2xl lg:text-3xl font-black text-gray-800">{kpis.pecas} un.</p>
             </div>
-            <div className="bg-white p-4 md:p-5 rounded-2xl border shadow-sm flex flex-col justify-center">
+            
+            <div className="bg-white p-4 md:p-5 rounded-2xl border shadow-sm flex flex-col justify-center col-span-2 md:col-span-1">
               <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Pedidos</p>
-              <p className="text-xl md:text-3xl font-black text-purple-600">{kpis.totalPedidos}</p>
+              <p className="text-xl md:text-2xl lg:text-3xl font-black text-purple-600">{kpis.totalPedidos}</p>
             </div>
           </div>
 
@@ -158,7 +246,6 @@ export default function DashboardBI() {
             </h3>
             <div className="h-52 md:h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                {/* Adicionado margem superior e ajuste nas laterais para não cortar no celular */}
                 <LineChart data={dadosGraficoLinha} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                   <XAxis dataKey="tempo" fontSize={10} md:fontSize={12} tickLine={false} axisLine={false} />
@@ -191,7 +278,6 @@ export default function DashboardBI() {
                 <p className="text-center text-gray-400 py-10 font-bold">Sem vendas no período.</p>
               ) : (
                 <div className="flex flex-col">
-                  {/* O Gráfico de Rosca menor pro celular pra sobrar espaço pra legenda */}
                   <div className="h-40 md:h-48 w-full flex justify-center items-center">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -203,7 +289,6 @@ export default function DashboardBI() {
                     </ResponsiveContainer>
                   </div>
                   
-                  {/* NOVA LEGENDA BONITONA AQUI */}
                   <div className="mt-2 md:mt-4 space-y-2 bg-gray-50 p-3 rounded-xl border border-gray-100">
                     {dadosGraficoProdutos.map((entry, index) => (
                       <div key={entry.name} className="flex justify-between items-center text-xs md:text-sm">

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import toast, { Toaster } from 'react-hot-toast';
 
+import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Vitrine from './components/Vitrine';
@@ -13,6 +14,10 @@ import LocalizadorEstoque from './components/LocalizadorEstoque';
 import DashboardBI from './components/DashboardBI';
 
 export default function App() {
+  // 🔐 ESTADOS DE AUTENTICAÇÃO
+  const [sessao, setSessao] = useState(null);
+  const [verificandoSessao, setVerificandoSessao] = useState(true);
+
   const [produtos, setProdutos] = useState([]);
   const [carregando, setCarregando] = useState(true);
   
@@ -27,11 +32,29 @@ export default function App() {
   const [modalLocalizadorAberto, setModalLocalizadorAberto] = useState(false);
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
 
+  // 🔐 VERIFICAR LOGIN QUANDO O APP ABRE E ESCUTAR MUDANÇAS
   useEffect(() => {
-    buscarProdutos();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSessao(session);
+      setVerificandoSessao(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessao(session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  // 🛡️ CORREÇÃO ANTI-PISCA: Só busca produtos quando o ID do usuário de fato mudar
+  useEffect(() => {
+    if (sessao?.user?.id) {
+      buscarProdutos();
+    }
+  }, [sessao?.user?.id]);
+
   const buscarProdutos = async () => {
+    setCarregando(true);
     const { data, error } = await supabase.from('produtos').select('*').order('nome', { ascending: true });
     if (!error) setProdutos(data);
     setCarregando(false);
@@ -121,17 +144,29 @@ export default function App() {
     toast.success("Venda finalizada com sucesso!");
   };
 
-  if (carregando) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600">Sincronizando Plataforma... ⏳</div>;
+  // 🔐 SE ESTIVER CHECANDO SESSÃO, MOSTRA TELA DE CARREGAMENTO
+  if (verificandoSessao) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-gray-50">Iniciando BancaFlash... ⚡</div>;
 
+  // 🔐 SE NÃO TIVER LOGADO, RENDERIZA SÓ A TELA DE LOGIN
+  if (!sessao) {
+    return (
+      <>
+        <Toaster position="top-center" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
+        <Login setSessao={setSessao} />
+      </>
+    );
+  }
+
+  // TELA DE CARREGAMENTO DOS PRODUTOS
+  if (carregando && produtos.length === 0) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-gray-50">Sincronizando sua Banca... ⏳</div>;
+
+  // ==========================================
+  // O APLICATIVO REAL COMEÇA AQUI
+  // ==========================================
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
       
-      {/* 👇 AQUI ESTÁ A MÁGICA! O Toaster global com zIndex infinito 👇 */}
-      <Toaster 
-        position="top-center" 
-        reverseOrder={false} 
-        containerStyle={{ zIndex: 999999 }}
-      />
+      <Toaster position="top-center" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
 
       <Sidebar 
         telaAtiva={telaAtiva} setTelaAtiva={setTelaAtiva}
@@ -139,8 +174,11 @@ export default function App() {
         menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto}
       />
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative pt-14 md:pt-0">
+        
+        {/* Header recebe as funções ou estados que precisa (o logout já está lá dentro agora) */}
         <Header setMenuMobileAberto={setMenuMobileAberto} />        
+        
         <main className="flex-1 overflow-y-auto relative">
           {telaAtiva === 'PDV' ? (
             <Vitrine produtos={produtos} setProdutoAberto={setProdutoAberto} />

@@ -5,24 +5,24 @@ import toast from 'react-hot-toast';
 export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdutos }) {
   const [busca, setBusca] = useState('');
   
+  // WIZARD DE CRIAÇÃO/EDIÇÃO DE VARIAÇÃO ÚNICA
   const [modalPassosAberto, setModalPassosAberto] = useState(false);
   const [passoAtual, setPassoAtual] = useState(1);
   const [editandoId, setEditandoId] = useState(null);
 
-  const [formBase, setFormBase] = useState({ nome: '', preco: '', preco_atacado: '' });
+  const [formBase, setFormBase] = useState({ nome: '', preco: '', preco_atacado: '', custo: '' });
   const [tamanhosSelecionados, setTamanhosSelecionados] = useState([]);
   
   const [coresLista, setCoresLista] = useState([]);
   const [formCor, setFormCor] = useState({ cor: '', saco: '', meta_banca: 3, meta_global: 6 });
   const [estoques, setEstoques] = useState({});
 
+  // ESTADO DA SANFONA
   const [expandidos, setExpandidos] = useState({});
 
-  // ==========================================
-  // 🪄 NOVOS ESTADOS PARA EDIÇÃO DO PRODUTO INTEIRO
-  // ==========================================
+  // EDIÇÃO EM MASSA DO PRODUTO (NOME, PREÇOS, CUSTO)
   const [modalEdicaoMassaAberto, setModalEdicaoMassaAberto] = useState(false);
-  const [formEdicaoMassa, setFormEdicaoMassa] = useState({ nomeAntigo: '', nomeNovo: '', preco: '', preco_atacado: '' });
+  const [formEdicaoMassa, setFormEdicaoMassa] = useState({ nomeAntigo: '', nomeNovo: '', preco: '', preco_atacado: '', custo: '' });
 
   if (!aberto) return null;
 
@@ -37,7 +37,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
 
   const abrirCriacaoNova = () => {
     setEditandoId(null);
-    setFormBase({ nome: '', preco: '', preco_atacado: '' });
+    setFormBase({ nome: '', preco: '', preco_atacado: '', custo: '' });
     setTamanhosSelecionados([]);
     setCoresLista([]);
     setFormCor({ cor: '', saco: '', meta_banca: 3, meta_global: 6 });
@@ -48,7 +48,12 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
 
   const abrirEdicaoExistente = (produto) => {
     setEditandoId(produto.id);
-    setFormBase({ nome: produto.nome, preco: produto.preco, preco_atacado: produto.preco_atacado || produto.preco });
+    setFormBase({ 
+      nome: produto.nome, 
+      preco: produto.preco, 
+      preco_atacado: produto.preco_atacado || produto.preco,
+      custo: produto.custo || ''
+    });
     setTamanhosSelecionados([produto.tam]);
     setFormCor({ cor: produto.cor, saco: produto.saco || '', meta_banca: produto.meta_banca || 3, meta_global: produto.meta_global || 6 });
     setEstoques({
@@ -58,9 +63,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     setModalPassosAberto(true);
   };
 
-  // ==========================================
-  // 🪄 FUNÇÕES PARA EDITAR/EXCLUIR O PRODUTO INTEIRO
-  // ==========================================
   const abrirEdicaoMassa = (nomeProduto) => {
     const variacoes = produtos.filter(p => p.nome === nomeProduto);
     if (variacoes.length > 0) {
@@ -68,7 +70,8 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
         nomeAntigo: variacoes[0].nome,
         nomeNovo: variacoes[0].nome,
         preco: variacoes[0].preco,
-        preco_atacado: variacoes[0].preco_atacado || variacoes[0].preco
+        preco_atacado: variacoes[0].preco_atacado || variacoes[0].preco,
+        custo: variacoes[0].custo || ''
       });
       setModalEdicaoMassaAberto(true);
     }
@@ -83,10 +86,10 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     const dadosMassa = {
       nome: formEdicaoMassa.nomeNovo.trim().toUpperCase(),
       preco: parseFloat(formEdicaoMassa.preco || 0),
-      preco_atacado: parseFloat(formEdicaoMassa.preco_atacado || 0)
+      preco_atacado: parseFloat(formEdicaoMassa.preco_atacado || 0),
+      custo: parseFloat(formEdicaoMassa.custo || 0)
     };
 
-    // Atualiza TODOS os registros que tem o nome antigo
     await supabase.from('produtos').update(dadosMassa).eq('nome', formEdicaoMassa.nomeAntigo);
 
     await buscarProdutos();
@@ -101,8 +104,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       toast.success("Modelo inteiro excluído com sucesso!");
     }
   };
-
-  // ==========================================
 
   const toggleTamanho = (tam) => {
     if (tamanhosSelecionados.includes(tam)) {
@@ -132,6 +133,13 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   };
 
   const salvarVariacao = async (fecharModalAposSalvar = true) => {
+    const dadosBase = {
+      nome: formBase.nome.trim().toUpperCase(),
+      preco: parseFloat(formBase.preco || 0),
+      preco_atacado: parseFloat(formBase.preco_atacado || 0),
+      custo: parseFloat(formBase.custo || 0)
+    };
+
     if (editandoId) {
       if (!formCor.cor.trim()) {
         toast.error("A cor não pode ficar vazia!");
@@ -139,9 +147,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       }
       
       const dadosEdicao = {
-        nome: formBase.nome.trim().toUpperCase(),
-        preco: parseFloat(formBase.preco || 0),
-        preco_atacado: parseFloat(formBase.preco_atacado || 0),
+        ...dadosBase,
         tam: tamanhosSelecionados[0],
         cor: formCor.cor.trim().toUpperCase(),
         estoque_banca: parseInt(estoques[tamanhosSelecionados[0]]?.banca || 0),
@@ -167,9 +173,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       coresFinais.forEach(cor => {
         tamanhosSelecionados.forEach(tam => {
           registrosParaSalvar.push({
-            nome: formBase.nome.trim().toUpperCase(),
-            preco: parseFloat(formBase.preco || 0),
-            preco_atacado: parseFloat(formBase.preco_atacado || 0),
+            ...dadosBase,
             tam: tam.trim().toUpperCase(),
             cor: cor,
             estoque_banca: 0, 
@@ -189,7 +193,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     
     if (fecharModalAposSalvar) {
       setModalPassosAberto(false);
-      toast.success("Salvo com sucesso!");
+      toast.success("Produto salvo com sucesso!");
     } else {
       setFormCor({ cor: '', saco: formCor.saco, meta_banca: 3, meta_global: 6 });
       setEstoques({});
@@ -237,10 +241,9 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
             
             return (
               <div key={nome} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
-                {/* CABEÇALHO CLICÁVEL COM BOTÕES DE EDIÇÃO EM MASSA */}
+                
+                {/* CABEÇALHO CLICÁVEL (SANFONA + EDIÇÃO EM MASSA) */}
                 <div className="bg-gray-100 hover:bg-gray-200 p-3 flex justify-between items-center border-b border-gray-200 transition-colors">
-                  
-                  {/* Área que clica para abrir a sanfona */}
                   <div 
                     onClick={() => toggleSanfona(nome)}
                     className="flex items-center gap-2 cursor-pointer select-none flex-1"
@@ -249,15 +252,14 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                     <h3 className="font-black text-gray-800 uppercase tracking-tight">{nome}</h3>
                   </div>
 
-                  {/* Botões do Produto (Paramos a propagação do clique para não abrir/fechar a sanfona) */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-gray-500 bg-white border px-2 py-1 rounded-lg shadow-sm hidden md:inline-block">Total: {estoqueTotal} un.</span>
                     <button onClick={(e) => { e.stopPropagation(); abrirEdicaoMassa(nome); }} className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shadow-sm active:scale-95">✏️</button>
                     <button onClick={(e) => { e.stopPropagation(); excluirProdutoMassa(nome); }} className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center shadow-sm active:scale-95">🗑️</button>
                   </div>
-
                 </div>
                 
+                {/* LISTA DE VARIAÇÕES */}
                 {estaExpandido && (
                   <div className="divide-y divide-gray-100 animate-fade-in bg-white">
                     {variacoes.map(v => (
@@ -327,6 +329,13 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                      <input type="number" className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold mt-1 focus:border-blue-500 outline-none" placeholder="R$" value={formBase.preco_atacado} onChange={e => setFormBase({...formBase, preco_atacado: e.target.value})} />
                    </div>
                  </div>
+
+                 {/* CAMPO DE CUSTO (NOVO) */}
+                 <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200 mt-2">
+                   <label className="text-xs font-bold text-yellow-700 uppercase block mb-1">Custo de Produção (Opcional)</label>
+                   <input type="number" className="w-full p-2 bg-transparent border-b-2 border-yellow-300 text-yellow-900 outline-none font-bold placeholder-yellow-400" placeholder="R$ 0.00" value={formBase.custo} onChange={e => setFormBase({...formBase, custo: e.target.value})} />
+                 </div>
+
                  <button 
                    onClick={() => { 
                      if(!formBase.nome) { toast.error('Preencha o nome do modelo!'); return; }
@@ -463,7 +472,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       )}
 
       {/* ========================================================= */}
-      {/* MODAL PARA EDITAR DADOS GERAIS DO PRODUTO (NOME E PREÇO)    */}
+      {/* MODAL PARA EDITAR DADOS GERAIS DO PRODUTO (NOME, PREÇOS E CUSTO) */}
       {/* ========================================================= */}
       {modalEdicaoMassaAberto && (
         <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4" onClick={() => setModalEdicaoMassaAberto(false)}>
@@ -504,13 +513,25 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                 </div>
               </div>
 
+              {/* CAMPO DE CUSTO NA EDIÇÃO EM MASSA (NOVO) */}
+              <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200">
+                <label className="text-xs font-bold text-yellow-700 uppercase block mb-1">Custo de Produção</label>
+                <input 
+                  type="number" 
+                  className="w-full p-2 bg-transparent border-b-2 border-yellow-300 text-yellow-900 outline-none font-bold placeholder-yellow-400" 
+                  placeholder="R$ 0.00"
+                  value={formEdicaoMassa.custo} 
+                  onChange={e => setFormEdicaoMassa({...formEdicaoMassa, custo: e.target.value})} 
+                />
+              </div>
+
               <div className="bg-blue-50 p-3 rounded-lg text-xs font-bold text-blue-800 mt-2 text-center">
-                Isso vai alterar os preços e o nome de <br/>TODAS as cores e tamanhos de uma vez!
+                Isso vai alterar os valores de <br/>TODAS as cores e tamanhos!
               </div>
 
               <button 
                 onClick={salvarEdicaoMassa} 
-                className="w-full bg-blue-600 text-white font-black py-4 rounded-xl mt-2 active:scale-95"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl mt-2 active:scale-95 transition-colors"
               >
                 SALVAR ALTERAÇÕES
               </button>
