@@ -24,6 +24,7 @@ export default function App() {
   const [modalAdminAberto, setModalAdminAberto] = useState(false);
   const [modalResumoAberto, setModalResumoAberto] = useState(false);
   const [modalLocalizadorAberto, setModalLocalizadorAberto] = useState(false);
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
 
   useEffect(() => {
     buscarProdutos();
@@ -128,11 +129,11 @@ export default function App() {
       <Sidebar 
         telaAtiva={telaAtiva} setTelaAtiva={setTelaAtiva}
         setModalAdminAberto={setModalAdminAberto} setModalResumoAberto={setModalResumoAberto} setModalLocalizadorAberto={setModalLocalizadorAberto}
+        menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto}
       />
 
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <Header />
-        
+        <Header setMenuMobileAberto={setMenuMobileAberto} />        
         <main className="flex-1 overflow-y-auto relative">
           {telaAtiva === 'PDV' ? (
             <Vitrine produtos={produtos} setProdutoAberto={setProdutoAberto} />

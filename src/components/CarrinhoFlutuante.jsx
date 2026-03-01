@@ -61,20 +61,16 @@ export default function CarrinhoFlutuante({ carrinho, modalCarrinhoAberto, setMo
     finalizarVenda(itensParaVenda, formaPagamento);
   };
 
-  const copiarPix = () => {
-    navigator.clipboard.writeText("suachavepix@email.com"); // Altere para a sua chave real
-    alert("Chave PIX copiada!");
-  };
-
   return (
     <>
       {modalCarrinhoAberto && (
-        <div className="fixed inset-0 bg-black/80 z-40 flex items-end" onClick={() => setModalCarrinhoAberto(false)}>
-          <div className="bg-gray-100 w-full rounded-t-3xl p-5 shadow-2xl flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/80 z-40 flex items-end justify-center" onClick={() => setModalCarrinhoAberto(false)}>
+          {/* Adicionei limite de largura no PC (md:w-[600px]) pra ficar mais elegante */}
+          <div className="bg-gray-100 w-full md:w-[600px] rounded-t-3xl md:rounded-3xl md:mb-10 p-5 shadow-2xl flex flex-col max-h-[95vh] md:max-h-[85vh]" onClick={e => e.stopPropagation()}>
             
             <div className="flex justify-between items-center mb-4 border-b pb-2">
               <h2 className="text-2xl font-black text-gray-800">Sacola ({totalItens} un.)</h2>
-              <button onClick={() => setModalCarrinhoAberto(false)} className="text-gray-400 bg-gray-200 w-8 h-8 rounded-full font-bold text-xl flex justify-center items-center pb-1">x</button>
+              <button onClick={() => setModalCarrinhoAberto(false)} className="text-gray-400 bg-gray-200 hover:bg-red-100 hover:text-red-500 transition-colors w-8 h-8 rounded-full font-bold text-xl flex justify-center items-center pb-1">x</button>
             </div>
             
             <div className="flex gap-2 mb-4 bg-white p-1 rounded-xl shadow-sm border">
@@ -82,7 +78,7 @@ export default function CarrinhoFlutuante({ carrinho, modalCarrinhoAberto, setMo
               <button onClick={() => setTipoVenda('ATACADO')} className={`flex-1 py-3 font-bold rounded-lg text-sm ${tipoVenda === 'ATACADO' ? 'bg-purple-600 text-white shadow' : 'text-gray-500'}`}>Atacado</button>
             </div>
 
-            <div className="flex-1 overflow-y-auto mb-4 space-y-4">
+            <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2">
               {Object.entries(carrinhoAgrupado).map(([nomeProduto, itens]) => {
                 const qtdGrupo = itens.reduce((acc, item) => acc + item.qtd, 0);
                 const precoBaseGrupo = tipoVenda === 'ATACADO' ? (itens[0].produto.preco_atacado || itens[0].produto.preco) : itens[0].produto.preco;
@@ -126,32 +122,26 @@ export default function CarrinhoFlutuante({ carrinho, modalCarrinhoAberto, setMo
               })}
             </div>
 
-            {/* SELEÇÃO DE PAGAMENTO (SÓ PIX E DINHEIRO) */}
+            {/* SELEÇÃO DE PAGAMENTO LIMPA (SÓ BOTÕES) */}
             <div className="bg-white p-3 rounded-xl border shadow-sm mb-4">
               <p className="text-xs font-bold text-gray-400 uppercase mb-2 text-center">Forma de Pagamento</p>
               <div className="flex gap-2">
                 <button onClick={() => setFormPagamento('PIX')} className={`flex-1 py-3 rounded-lg font-black text-sm transition-colors border-2 ${formaPagamento === 'PIX' ? 'bg-teal-50 border-teal-500 text-teal-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>PIX</button>
                 <button onClick={() => setFormPagamento('DINHEIRO')} className={`flex-1 py-3 rounded-lg font-black text-sm transition-colors border-2 ${formaPagamento === 'DINHEIRO' ? 'bg-green-50 border-green-500 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>Dinheiro</button>
               </div>
-
-              {formaPagamento === 'PIX' && (
-                <div className="mt-3 flex justify-between items-center bg-gray-50 p-2 rounded border border-dashed border-gray-300">
-                  <span className="text-sm font-bold text-gray-600">suachavepix@email.com</span>
-                  <button onClick={copiarPix} className="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded font-bold shadow-sm active:scale-95">Copiar</button>
-                </div>
-              )}
             </div>
 
-            <button onClick={processarCheckout} className="w-full bg-green-500 text-white text-xl py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-transform">
+            <button onClick={processarCheckout} className="w-full bg-green-500 hover:bg-green-600 text-white text-xl py-4 rounded-2xl font-black shadow-lg active:scale-95 transition-all">
               💸 FECHAR: R$ {totalFinal.toFixed(2)}
             </button>
           </div>
         </div>
       )}
 
+      {/* Botão flutuante na parte de baixo centralizado no PC */}
       {!modalCarrinhoAberto && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 z-30">
-          <button onClick={() => setModalCarrinhoAberto(true)} className="w-full bg-gray-900 text-white py-4 rounded-2xl shadow-2xl font-bold flex justify-between px-6 items-center border-t-4 border-blue-500 active:scale-95 transition-transform">
+        <div className="fixed bottom-0 left-0 right-0 p-4 z-30 pointer-events-none flex justify-center">
+          <button onClick={() => setModalCarrinhoAberto(true)} className="w-full md:w-[600px] pointer-events-auto bg-gray-900 hover:bg-black text-white py-4 rounded-2xl shadow-2xl font-bold flex justify-between px-6 items-center border-t-4 border-blue-500 active:scale-95 transition-all">
             <span className="flex items-center gap-2">
               <span className="bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-inner">{totalItens}</span>
               Ver Sacola
