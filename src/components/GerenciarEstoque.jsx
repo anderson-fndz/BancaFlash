@@ -97,26 +97,26 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     buscarProdutos();
   };
 
-  const salvarVariacao = async (e) => {
+const salvarVariacao = async (e) => {
     e.preventDefault();
-    // Agora o banco de dados recebe as colunas novas
+    // Forçando tudo para MAIÚSCULO na hora de salvar no banco
     const dados = {
-      nome: modeloAberto, 
-      cor: form.cor.trim(), 
-      tam: form.tam.trim(), 
+      nome: modeloAberto.toUpperCase(), 
+      cor: form.cor.trim().toUpperCase(), 
+      tam: form.tam.trim().toUpperCase(), 
       estoque_banca: parseInt(form.estoque_banca || 0), 
       meta_banca: parseInt(form.meta_banca || 2),
       estoque_saco: parseInt(form.estoque_saco || 0), 
       meta_global: parseInt(form.meta_global || 6),
       preco: parseFloat(precoModelo || 0), 
       preco_atacado: parseFloat(precoAtacadoModelo || 0), 
-      saco: form.saco.trim()
+      saco: form.saco.trim().toUpperCase()
     };
     if (form.id) await supabase.from('produtos').update(dados).eq('id', form.id);
     else await supabase.from('produtos').insert([dados]);
     setForm(null); buscarProdutos();
   };
-
+  
   const iniciarNovoProduto = () => {
     setFormProduto({ nome: '', preco: '', preco_atacado: '' });
     setAba('CRIAR_PRODUTO');
