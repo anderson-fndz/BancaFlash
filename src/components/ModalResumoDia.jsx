@@ -55,7 +55,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
 
   const reposicao = produtos.filter(p => (p.estoque_banca || 0) < (p.meta_banca || 2));
 
-  // ==========================================
+// ==========================================
   // 🤖 FUNÇÃO QUE MANDA MENSAGEM PRO TELEGRAM
   // ==========================================
   const enviarProTelegram = async (tipo) => {
@@ -72,13 +72,32 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       textoMensagem += `⚡ _BancaFlash System_`;
     } 
     else if (tipo === 'REPOSICAO') {
-      textoMensagem = `📦 *LISTA DE SEPARAÇÃO / REPOSIÇÃO* (${dataHoje})\n\n`;
+      textoMensagem = `📦 *LISTA DE REPOSIÇÃO* (${dataHoje})\n`;
+      
       if (reposicao.length === 0) {
-        textoMensagem += `✅ A banca está 100% abastecida! Nenhuma reposição necessária.\n`;
+        textoMensagem += `\n✅ A banca está 100% abastecida! Nenhuma reposição necessária.\n`;
       } else {
-        reposicao.forEach(p => {
-          const qtdTrazer = (p.meta_banca || 2) - (p.estoque_banca || 0);
-          textoMensagem += `▪️ *${qtdTrazer}x* ${p.nome} (${p.cor} | ${p.tam}) - Puxar do Saco ${p.saco || '-'}\n`;
+        // DUPLO AGRUPAMENTO: Primeiro por Produto, depois por Cor!
+        const reposicaoAgrupada = reposicao.reduce((acc, p) => {
+          if (!acc[p.nome]) acc[p.nome] = {};
+          if (!acc[p.nome][p.cor]) acc[p.nome][p.cor] = [];
+          acc[p.nome][p.cor].push(p);
+          return acc;
+        }, {});
+
+        Object.entries(reposicaoAgrupada).forEach(([nomeProduto, coresDesteProduto]) => {
+          textoMensagem += `\n👕 *${nomeProduto}*\n`; // Título do produto
+          
+          Object.entries(coresDesteProduto).forEach(([corProduto, itens]) => {
+            textoMensagem += `  🔹 _${corProduto}_\n`; // Subtítulo da cor
+            
+            itens.forEach(p => {
+              const qtdTrazer = (p.meta_banca || 2) - (p.estoque_banca || 0);
+              const textoSaco = (p.saco && p.saco !== '-' && p.saco.trim() !== '') ? ` ➔ Saco ${p.saco}` : '';
+              
+              textoMensagem += `    ▪️ ${qtdTrazer}x (Tam: ${p.tam})${textoSaco}\n`;
+            });
+          });
         });
       }
       textoMensagem += `\n⚡ _BancaFlash System_`;
