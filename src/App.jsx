@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import toast, { Toaster } from 'react-hot-toast';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -50,14 +51,14 @@ export default function App() {
     }
     await buscarProdutos();
     setCarregando(false);
-    alert("✅ Peças transferidas para a Banca com sucesso!");
+    toast.success("Peças transferidas para a Banca com sucesso!");
   };
 
   const adicionarAoCarrinho = (produto) => {
     const itemNoCarrinho = carrinho.find(item => item.produto.id === produto.id);
     const estoqueTotalDisponivel = (produto.estoque_banca || 0) + (produto.estoque_saco || 0);
     if (itemNoCarrinho && itemNoCarrinho.qtd >= estoqueTotalDisponivel) {
-      alert("Estoque limite atingido (Banca + Estoque)!"); return;
+      toast.error("Estoque limite atingido (Banca + Estoque)!"); return;
     }
     if (itemNoCarrinho) {
       setCarrinho(carrinho.map(item => item.produto.id === produto.id ? { ...item, qtd: item.qtd + 1 } : item));
@@ -71,14 +72,13 @@ export default function App() {
       if (item.produto.id === produtoId) {
         const estoqueTotalDisponivel = (item.produto.estoque_banca || 0) + (item.produto.estoque_saco || 0);
         const novaQtd = item.qtd + delta;
-        if (novaQtd > estoqueTotalDisponivel) { alert("Estoque limite atingido!"); return item; }
+        if (novaQtd > estoqueTotalDisponivel) { toast.error("Estoque limite atingido!"); return item; }
         return { ...item, qtd: novaQtd };
       }
       return item;
     }).filter(item => item.qtd > 0));
   };
 
-  // AQUI TÁ O SEGREDO: Recebendo a formaPagamento do Carrinho!
   const finalizarVenda = async (itensVendidos, formaPagamento) => {
     if (itensVendidos.length === 0) return;
     setCarregando(true);
@@ -109,7 +109,7 @@ export default function App() {
         quantidade: item.quantidade, 
         preco_unitario: item.precoVendido, 
         total_item: item.quantidade * item.precoVendido,
-        forma_pagamento: formaPagamento // <-- SALVANDO CORRETAMENTE AQUI
+        forma_pagamento: formaPagamento
       });
     }
     
@@ -118,7 +118,7 @@ export default function App() {
     setModalCarrinhoAberto(false);
     await buscarProdutos(); 
     setCarregando(false);
-    alert("✅ Venda finalizada com sucesso!");
+    toast.success("Venda finalizada com sucesso!");
   };
 
   if (carregando) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600">Sincronizando Plataforma... ⏳</div>;
@@ -126,6 +126,13 @@ export default function App() {
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
       
+      {/* 👇 AQUI ESTÁ A MÁGICA! O Toaster global com zIndex infinito 👇 */}
+      <Toaster 
+        position="top-center" 
+        reverseOrder={false} 
+        containerStyle={{ zIndex: 999999 }}
+      />
+
       <Sidebar 
         telaAtiva={telaAtiva} setTelaAtiva={setTelaAtiva}
         setModalAdminAberto={setModalAdminAberto} setModalResumoAberto={setModalResumoAberto} setModalLocalizadorAberto={setModalLocalizadorAberto}

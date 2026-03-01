@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import toast from 'react-hot-toast'; 
 
 export default function ModalResumoDia({ aberto, fechar, produtos }) {
-  // === 🤖 SEUS DADOS DO TELEGRAM JÁ ESTÃO AQUI ===
+  // === 🤖 DADOS DO TELEGRAM ===
   const TELEGRAM_TOKEN = '8694609661:AAHMZ0K1_JFhc3OwS1RxsWIzc3ry3Tb5wVI'; 
   const CHAT_ID = '7129035616';
   // ===============================================
@@ -15,6 +16,9 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
   const [todasAsVendas, setTodasAsVendas] = useState([]);
   const [carregandoDados, setCarregandoDados] = useState(false);
   const [enviandoMsg, setEnviandoMsg] = useState(false);
+
+  // 🪄 ESTADO DA SANFONA DE REPOSIÇÃO
+  const [expandidosRep, setExpandidosRep] = useState({});
 
   useEffect(() => {
     if (aberto) buscarVendasDeHoje();
@@ -53,13 +57,26 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     setCarregandoDados(false);
   };
 
-  const reposicao = produtos.filter(p => (p.estoque_banca || 0) < (p.meta_banca || 2));
+  const reposicao = produtos.filter(p => (p.estoque_banca || 0) < (p.meta_banca || 3));
 
-// ==========================================
+  // AGRUPAMENTO PARA A SANFONA NA TELA
+  const reposicaoAgrupadaParaUI = reposicao.reduce((acc, p) => {
+    if (!acc[p.nome]) acc[p.nome] = [];
+    acc[p.nome].push(p);
+    return acc;
+  }, {});
+
+  const toggleSanfonaRep = (nomeProduto) => {
+    setExpandidosRep(prev => ({ ...prev, [nomeProduto]: !prev[nomeProduto] }));
+  };
+
+  // ==========================================
   // 🤖 FUNÇÃO QUE MANDA MENSAGEM PRO TELEGRAM
   // ==========================================
   const enviarProTelegram = async (tipo) => {
     setEnviandoMsg(true);
+    const loadingToast = toast.loading(`Enviando ${tipo === 'FECHAMENTO' ? 'Fechamento' : 'Lista'} pro Telegram...`);
+    
     let textoMensagem = '';
     const dataHoje = new Date().toLocaleDateString('pt-BR');
 
@@ -77,7 +94,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       if (reposicao.length === 0) {
         textoMensagem += `\n✅ A banca está 100% abastecida! Nenhuma reposição necessária.\n`;
       } else {
-        // DUPLO AGRUPAMENTO: Primeiro por Produto, depois por Cor!
         const reposicaoAgrupada = reposicao.reduce((acc, p) => {
           if (!acc[p.nome]) acc[p.nome] = {};
           if (!acc[p.nome][p.cor]) acc[p.nome][p.cor] = [];
@@ -86,13 +102,13 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
         }, {});
 
         Object.entries(reposicaoAgrupada).forEach(([nomeProduto, coresDesteProduto]) => {
-          textoMensagem += `\n👕 *${nomeProduto}*\n`; // Título do produto
+          textoMensagem += `\n👕 *${nomeProduto}*\n`; 
           
           Object.entries(coresDesteProduto).forEach(([corProduto, itens]) => {
-            textoMensagem += `  🔹 _${corProduto}_\n`; // Subtítulo da cor
+            textoMensagem += `  🔹 _${corProduto}_\n`; 
             
             itens.forEach(p => {
-              const qtdTrazer = (p.meta_banca || 2) - (p.estoque_banca || 0);
+              const qtdTrazer = (p.meta_banca || 3) - (p.estoque_banca || 0);
               const textoSaco = (p.saco && p.saco !== '-' && p.saco.trim() !== '') ? ` ➔ Saco ${p.saco}` : '';
               
               textoMensagem += `    ▪️ ${qtdTrazer}x (Tam: ${p.tam})${textoSaco}\n`;
@@ -106,7 +122,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
     
     try {
-      await fetch(url, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,9 +131,14 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
           parse_mode: 'Markdown' 
         })
       });
-      alert(`✅ ${tipo === 'FECHAMENTO' ? 'Fechamento' : 'Lista'} enviado pro seu Telegram!`);
+      
+      if(response.ok) {
+        toast.success(`${tipo === 'FECHAMENTO' ? 'Fechamento' : 'Lista'} enviado!`, { id: loadingToast });
+      } else {
+        throw new Error('Falha na API');
+      }
     } catch (error) {
-      alert("❌ Erro ao enviar pro Telegram. Verifica a internet.");
+      toast.error("Erro de conexão. Verifique sua internet.", { id: loadingToast });
     }
     setEnviandoMsg(false);
   };
@@ -143,8 +164,8 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
         </div>
 
         <div className="flex gap-1 mb-4 bg-gray-200 p-1 rounded-xl">
-          <button onClick={() => setAba('RESUMO')} className={`flex-1 py-2 font-bold rounded-lg text-sm ${aba === 'RESUMO' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Visão Geral</button>
-          <button onClick={() => setAba('VENDAS')} className={`flex-1 py-2 font-bold rounded-lg text-sm ${aba === 'VENDAS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Histórico por Cliente</button>
+          <button onClick={() => setAba('RESUMO')} className={`flex-1 py-2 font-bold rounded-lg text-sm transition-all ${aba === 'RESUMO' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Visão Geral</button>
+          <button onClick={() => setAba('VENDAS')} className={`flex-1 py-2 font-bold rounded-lg text-sm transition-all ${aba === 'VENDAS' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>Histórico por Cliente</button>
         </div>
         
         <div className="flex-1 overflow-y-auto pb-10 pr-2">
@@ -156,11 +177,10 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                 <p className="text-3xl font-black text-green-600">R$ {faturamento.toFixed(2)}</p>
               </div>
               
-              {/* BOTÃO MÁGICO DO TELEGRAM - FECHAMENTO */}
               <button 
                 onClick={() => enviarProTelegram('FECHAMENTO')}
                 disabled={enviandoMsg}
-                className="w-full mb-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow active:scale-95 flex justify-center items-center gap-2 transition-all"
+                className="w-full mb-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl shadow active:scale-95 flex justify-center items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 <span className="text-xl">✈️</span> {enviandoMsg ? 'Enviando...' : 'Enviar Fechamento p/ Telegram'}
               </button>
@@ -178,35 +198,62 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
 
               <div className="flex justify-between items-center mb-3 border-b pb-2 mt-6">
                 <h3 className="font-black text-gray-700">📦 Precisa Repor na Banca:</h3>
-                {/* BOTÃO MÁGICO DO TELEGRAM - REPOSIÇÃO */}
                 <button 
                   onClick={() => enviarProTelegram('REPOSICAO')}
                   disabled={enviandoMsg}
-                  className="bg-gray-800 hover:bg-black text-white text-xs font-bold px-3 py-2 rounded-lg active:scale-95 transition-colors flex items-center gap-1"
+                  className="bg-gray-800 hover:bg-black text-white text-xs font-bold px-3 py-2 rounded-lg active:scale-95 transition-colors flex items-center gap-1 disabled:opacity-70"
                 >
                   <span>✈️</span> Enviar Lista
                 </button>
               </div>
 
-              <div className="space-y-2">
+              {/* LISTA SANFONA DE REPOSIÇÃO NA TELA */}
+              <div className="space-y-3">
                 {reposicao.length === 0 ? (
                   <div className="text-center mt-6">
                     <span className="text-4xl">🎉</span>
                     <p className="text-gray-500 font-bold mt-2">Banca 100% abastecida!</p>
                   </div>
                 ) : (
-                  reposicao.map(p => {
-                    const qtdTrazer = (p.meta_banca || 2) - (p.estoque_banca || 0);
+                  Object.entries(reposicaoAgrupadaParaUI).map(([nomeProduto, itens]) => {
+                    const estaExpandido = expandidosRep[nomeProduto];
+                    
                     return (
-                      <div key={p.id} className="bg-white p-3 rounded-xl border border-red-100 shadow-sm flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-gray-800 uppercase text-sm">{p.nome}</p>
-                          <p className="text-xs text-gray-500">{p.cor} | Tam: <span className="font-bold">{p.tam}</span></p>
+                      <div key={nomeProduto} className="bg-white rounded-xl border border-red-100 shadow-sm overflow-hidden transition-all duration-300">
+                        {/* CABEÇALHO CLICÁVEL DA SANFONA */}
+                        <div 
+                          onClick={() => toggleSanfonaRep(nomeProduto)}
+                          className="bg-red-50 hover:bg-red-100 p-3 flex justify-between items-center cursor-pointer select-none transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-red-400 font-bold text-xs">{estaExpandido ? '▼' : '▶'}</span>
+                            <p className="font-black text-gray-800 uppercase text-sm">{nomeProduto}</p>
+                          </div>
+                          <span className="text-xs font-bold text-red-600 bg-white border border-red-200 px-2 py-1 rounded-lg">
+                            {itens.length} pçs p/ repor
+                          </span>
                         </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase">Saco {p.saco || '-'}</p>
-                          <p className="font-black text-red-500 text-lg">Puxar {qtdTrazer}</p>
-                        </div>
+
+                        {/* LISTA DE VARIAÇÕES (SÓ MOSTRA SE ABERTO) */}
+                        {estaExpandido && (
+                          <div className="divide-y divide-gray-100 p-2 animate-fade-in bg-white">
+                            {itens.map(p => {
+                              const qtdTrazer = (p.meta_banca || 3) - (p.estoque_banca || 0);
+                              return (
+                                <div key={p.id} className="p-2 flex justify-between items-center hover:bg-gray-50 transition-colors">
+                                  <div>
+                                    <p className="text-sm font-bold text-gray-700">{p.cor}</p>
+                                    <p className="text-xs text-gray-500">Tam: <span className="font-bold text-blue-600">{p.tam}</span></p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">Saco {p.saco || '-'}</p>
+                                    <p className="font-black text-red-500 text-base">Puxar {qtdTrazer}</p>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     )
                   })
