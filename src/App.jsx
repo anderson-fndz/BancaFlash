@@ -11,7 +11,8 @@ import CarrinhoFlutuante from './components/CarrinhoFlutuante';
 import GerenciarEstoque from './components/GerenciarEstoque';
 import ModalResumoDia from './components/ModalResumoDia';
 import LocalizadorEstoque from './components/LocalizadorEstoque';
-import ModalReposicao from './components/ModalReposicao'; // 📦 Novo Modal de Reposição
+import ModalReposicao from './components/ModalReposicao';
+import ModalConciliacao from './components/ModalConciliacao'; // ✨ IMPORTADO AQUI!
 import DashboardBI from './components/DashboardBI';
 
 export default function App() {
@@ -30,7 +31,8 @@ export default function App() {
   const [modalAdminAberto, setModalAdminAberto] = useState(false);
   const [modalResumoAberto, setModalResumoAberto] = useState(false);
   const [modalLocalizadorAberto, setModalLocalizadorAberto] = useState(false);
-  const [modalReposicaoAberto, setModalReposicaoAberto] = useState(false); // 📦 Estado da Reposição
+  const [modalReposicaoAberto, setModalReposicaoAberto] = useState(false);
+  const [modalConciliacaoAberto, setModalConciliacaoAberto] = useState(false); // ✨ ESTADO AQUI!
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
 
   useEffect(() => {
@@ -46,7 +48,6 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 🛡️ CORREÇÃO ANTI-VAZAMENTO E ANTI-PISCA
   useEffect(() => {
     if (sessao?.user?.id) {
       setProdutos([]);
@@ -85,7 +86,10 @@ export default function App() {
 
   const adicionarAoCarrinho = (produto) => {
     const itemNoCarrinho = carrinho.find(item => item.produto.id === produto.id);
-    const estoqueTotalDisponivel = (produto.estoque_banca || 0) + (produto.estoque_saco || 0);
+    
+    const isGenerico = String(produto.id).startsWith('GEN-');
+    const estoqueTotalDisponivel = isGenerico ? 9999 : ((produto.estoque_banca || 0) + (produto.estoque_saco || 0));
+    
     if (itemNoCarrinho && itemNoCarrinho.qtd >= estoqueTotalDisponivel) {
       toast.error("Estoque limite atingido (Banca + Estoque)!"); return;
     }
@@ -99,7 +103,9 @@ export default function App() {
   const alterarQuantidadeCarrinho = (produtoId, delta) => {
     setCarrinho(prev => prev.map(item => {
       if (item.produto.id === produtoId) {
-        const estoqueTotalDisponivel = (item.produto.estoque_banca || 0) + (item.produto.estoque_saco || 0);
+        const isGenerico = String(produtoId).startsWith('GEN-');
+        const estoqueTotalDisponivel = isGenerico ? 9999 : ((item.produto.estoque_banca || 0) + (item.produto.estoque_saco || 0));
+        
         const novaQtd = item.qtd + delta;
         if (novaQtd > estoqueTotalDisponivel) { toast.error("Estoque limite atingido!"); return item; }
         return { ...item, qtd: novaQtd };
@@ -115,32 +121,40 @@ export default function App() {
     const idTransacao = Date.now().toString(); 
     
     for (const item of itensVendidos) {
-      let qtdRestanteParaBaixar = item.quantidade;
-      let novoEstoqueBanca = item.produtoCompleto.estoque_banca || 0;
-      let novoEstoqueSaco = item.produtoCompleto.estoque_saco || 0;
-      
-      if (novoEstoqueBanca >= qtdRestanteParaBaixar) {
-        novoEstoqueBanca -= qtdRestanteParaBaixar;
-      } else {
-        qtdRestanteParaBaixar -= novoEstoqueBanca;
-        novoEstoqueBanca = 0;
-        novoEstoqueSaco -= qtdRestanteParaBaixar;
+      const isGenerico = String(item.id).startsWith('GEN-');
+
+      if (!isGenerico) {
+        let qtdRestanteParaBaixar = item.quantidade;
+        let novoEstoqueBanca = item.produtoCompleto.estoque_banca || 0;
+        let novoEstoqueSaco = item.produtoCompleto.estoque_saco || 0;
+        
+        if (novoEstoqueBanca >= qtdRestanteParaBaixar) {
+          novoEstoqueBanca -= qtdRestanteParaBaixar;
+        } else {
+          qtdRestanteParaBaixar -= novoEstoqueBanca;
+          novoEstoqueBanca = 0;
+          novoEstoqueSaco -= qtdRestanteParaBaixar;
+        }
+        await supabase.from('produtos').update({ estoque_banca: novoEstoqueBanca, estoque_saco: novoEstoqueSaco }).eq('id', item.id);
       }
       
-      await supabase.from('produtos').update({ estoque_banca: novoEstoqueBanca, estoque_saco: novoEstoqueSaco }).eq('id', item.id);
-      
-      registrosVenda.push({ 
+      const registro = { 
         transacao_id: idTransacao, 
-        produto_id: item.id, 
         produto_nome: item.nome, 
-        produto_cor: item.cor, 
-        produto_tam: item.tam, 
+        produto_cor: isGenerico ? 'PENDENTE' : item.cor, 
+        produto_tam: isGenerico ? 'PENDENTE' : item.tam, 
         quantidade: item.quantidade, 
         preco_unitario: item.precoVendido, 
         total_item: item.quantidade * item.precoVendido,
         forma_pagamento: formaPagamento,
-        user_id: sessao.user.id // Garante que a venda tenha o crachá do usuário logado
-      });
+        user_id: sessao.user.id
+      };
+
+      if (!isGenerico) {
+        registro.produto_id = item.id;
+      }
+
+      registrosVenda.push(registro);
     }
     
     await supabase.from('vendas').insert(registrosVenda);
@@ -173,7 +187,8 @@ export default function App() {
         setModalAdminAberto={setModalAdminAberto} 
         setModalResumoAberto={setModalResumoAberto} 
         setModalLocalizadorAberto={setModalLocalizadorAberto}
-        setModalReposicaoAberto={setModalReposicaoAberto} // 📦 Passando pro Sidebar
+        setModalReposicaoAberto={setModalReposicaoAberto}
+        setModalConciliacaoAberto={setModalConciliacaoAberto}
         menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto}
       />
 
@@ -211,9 +226,14 @@ export default function App() {
         produtos={produtos} transferirParaBanca={transferirParaBanca}
       />
 
-      {/* 📦 NOVO COMPONENTE DE REPOSIÇÃO */}
       <ModalReposicao
         aberto={modalReposicaoAberto} fechar={() => setModalReposicaoAberto(false)}
+        produtos={produtos} buscarProdutos={buscarProdutos}
+      />
+
+      {/* ✨ RENDERIZADO AQUI! */}
+      <ModalConciliacao 
+        aberto={modalConciliacaoAberto} fechar={() => setModalConciliacaoAberto(false)}
         produtos={produtos} buscarProdutos={buscarProdutos}
       />
 

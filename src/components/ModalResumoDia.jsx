@@ -81,7 +81,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       hora: `${horas}:${minutos}`,
       data_original: transacao.hora,
       forma_pagamento: transacao.forma_pagamento,
-      itens: JSON.parse(JSON.stringify(transacao.itens)) // Copia profunda pra não alterar a tela antes de salvar
+      itens: JSON.parse(JSON.stringify(transacao.itens)) 
     });
     setModalEdicaoAberto(true);
   };
@@ -100,7 +100,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       const [horas, minutos] = vendaEditando.hora.split(':');
       novaData.setHours(horas, minutos);
 
-      // 1. Atualiza a Transação Inteira (Horário e Pagamento)
       await supabase.from('vendas')
         .update({ 
           created_at: novaData.toISOString(),
@@ -108,7 +107,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
         })
         .eq('transacao_id', vendaEditando.transacao_id);
 
-      // 2. Atualiza as cores e tamanhos de cada item dessa venda
       for (const item of vendaEditando.itens) {
         await supabase.from('vendas')
           .update({
@@ -144,7 +142,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
 
         <div className="flex-1 overflow-y-auto p-5 custom-scrollbar pb-8">
           
-          {/* ABA RESUMO */}
           {abaAtiva === 'resumo' && (
             <div className="space-y-6 animate-fade-in">
               <div className="grid grid-cols-2 gap-3">
@@ -197,7 +194,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
             </div>
           )}
 
-          {/* ABA HISTÓRICO */}
           {abaAtiva === 'historico' && (
             <div className="space-y-4 animate-fade-in">
               {Object.values(transacoes).length === 0 ? (
@@ -206,7 +202,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                 Object.values(transacoes).sort((a,b) => new Date(b.hora) - new Date(a.hora)).map((t, index) => (
                   <div key={t.id} className="bg-white border-2 border-gray-100 rounded-2xl p-4 shadow-sm hover:border-blue-200 transition-colors group relative">
                     
-                    {/* BOTÃO DE EDITAR (Aparece em destaque) */}
                     <button 
                       onClick={() => abrirEdicaoVenda(t)}
                       className="absolute -top-3 -right-3 bg-blue-100 hover:bg-blue-600 text-blue-600 hover:text-white border-2 border-white shadow-md p-2 rounded-xl transition-all font-black text-xs active:scale-95"
@@ -243,9 +238,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
         </div>
       </div>
 
-      {/* ========================================================= */}
-      {/* ✏️ MODAL DE EDIÇÃO DE VENDA (RETROATIVA) */}
-      {/* ========================================================= */}
       {modalEdicaoAberto && vendaEditando && (
         <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4" onClick={() => setModalEdicaoAberto(false)}>
           <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in" onClick={e => e.stopPropagation()}>
@@ -255,7 +247,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
             </div>
 
             <div className="space-y-4">
-              {/* Ajuste de Tempo e Pagamento */}
               <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 uppercase">Horário</label>
@@ -280,7 +271,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                 </div>
               </div>
 
-              {/* Ajuste de Cor e Tamanho dos Itens */}
               <div>
                 <p className="text-xs font-black text-gray-800 uppercase mb-2 border-b pb-1">Peças da Venda:</p>
                 <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar pr-2">

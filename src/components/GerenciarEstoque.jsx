@@ -5,7 +5,6 @@ import toast from 'react-hot-toast';
 export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdutos }) {
   const [busca, setBusca] = useState('');
   
-  // WIZARD DE CRIAÇÃO/EDIÇÃO DE PRODUTO
   const [modalPassosAberto, setModalPassosAberto] = useState(false);
   const [passoAtual, setPassoAtual] = useState(1);
   const [editandoId, setEditandoId] = useState(null);
@@ -17,14 +16,11 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   const [formCor, setFormCor] = useState({ cor: '', saco: '', meta_banca: 3, meta_global: 6 });
   const [estoques, setEstoques] = useState({});
 
-  // ESTADO DA SANFONA
   const [expandidos, setExpandidos] = useState({});
 
-  // EDIÇÃO EM MASSA DO PRODUTO (NOME, PREÇOS, CUSTO)
   const [modalEdicaoMassaAberto, setModalEdicaoMassaAberto] = useState(false);
   const [formEdicaoMassa, setFormEdicaoMassa] = useState({ nomeAntigo: '', nomeNovo: '', preco: '', preco_atacado: '', custo: '' });
 
-  // ✨ NOVO: ADICIONAR VARIAÇÃO RÁPIDA (Cor/Tam) A UM PRODUTO EXISTENTE
   const [modalVariacaoRapidaAberto, setModalVariacaoRapidaAberto] = useState(false);
   const [formVariacaoRapida, setFormVariacaoRapida] = useState({
     nome: '', preco: 0, preco_atacado: 0, custo: 0, cor: '', tam: '', saco: '', meta_banca: 3, meta_global: 6
@@ -36,6 +32,17 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   const modelosFiltrados = nomesUnicos.filter(nome => nome.toLowerCase().includes(busca.toLowerCase()));
 
   const tamanhosComuns = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', 'G4', 'U'];
+
+  // 🧠 A VACINA DA ORDENAÇÃO AQUI
+  const ordemTamanhos = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', 'G4', 'U'];
+  const sortLogico = (a, b) => {
+    let idxA = ordemTamanhos.indexOf(String(a.tam || '').trim().toUpperCase());
+    let idxB = ordemTamanhos.indexOf(String(b.tam || '').trim().toUpperCase());
+    if (idxA === -1) idxA = 999;
+    if (idxB === -1) idxB = 999;
+    if (idxA !== idxB) return idxA - idxB;
+    return String(a.cor || '').localeCompare(String(b.cor || ''));
+  };
 
   const toggleSanfona = (nomeProduto) => {
     setExpandidos(prev => ({ ...prev, [nomeProduto]: !prev[nomeProduto] }));
@@ -113,7 +120,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     }
   };
 
-  // ✨ FUNÇÕES DA NOVA VARIAÇÃO RÁPIDA
   const abrirNovaVariacaoRapida = (produtoBase) => {
     setFormVariacaoRapida({
       nome: produtoBase.nome,
@@ -149,7 +155,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       estoque_saco: 0,
       meta_banca: formVariacaoRapida.meta_banca,
       meta_global: formVariacaoRapida.meta_global
-      // user_id é pego automaticamente pelo banco (DEFAULT auth.uid())
     };
 
     const { error } = await supabase.from('produtos').insert([registro]);
@@ -160,12 +165,11 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     } else {
       await buscarProdutos();
       setModalVariacaoRapidaAberto(false);
-      setExpandidos(prev => ({ ...prev, [formVariacaoRapida.nome]: true })); // Expande a sanfona pra mostrar
+      setExpandidos(prev => ({ ...prev, [formVariacaoRapida.nome]: true }));
       toast.success("Nova variação adicionada!", { id: loadingId });
     }
   };
 
-  // WIZARD NORMAL...
   const toggleTamanho = (tam) => {
     if (tamanhosSelecionados.includes(tam)) {
       setTamanhosSelecionados(tamanhosSelecionados.filter(t => t !== tam));
@@ -306,7 +310,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
             return (
               <div key={nome} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
                 
-                {/* CABEÇALHO CLICÁVEL (SANFONA + BOTÕES DE AÇÃO) */}
                 <div className="bg-gray-100 hover:bg-gray-200 p-3 flex justify-between items-center border-b border-gray-200 transition-colors">
                   <div 
                     onClick={() => toggleSanfona(nome)}
@@ -319,7 +322,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                   <div className="flex items-center gap-1.5 md:gap-2">
                     <span className="text-xs font-bold text-gray-500 bg-white border px-2 py-1.5 rounded-lg shadow-sm hidden md:inline-block">Total: {estoqueTotal} un.</span>
                     
-                    {/* NOVO BOTÃO DE VARIAÇÃO RÁPIDA */}
                     <button 
                       onClick={(e) => { e.stopPropagation(); abrirNovaVariacaoRapida(variacoes[0]); }} 
                       className="text-[10px] md:text-xs font-black bg-green-100 text-green-700 px-2 py-1.5 rounded-lg active:scale-95 shadow-sm uppercase border border-green-200 hover:bg-green-200 transition-colors"
@@ -332,14 +334,15 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                   </div>
                 </div>
                 
-                {/* LISTA DE VARIAÇÕES (ORDENADAS POR COR) */}
                 {estaExpandido && (
                   <div className="divide-y divide-gray-100 animate-fade-in bg-white">
-                    {variacoes.sort((a,b) => a.cor.localeCompare(b.cor)).map(v => (
+                    {/* 🧠 APLICANDO A ORDENAÇÃO AQUI */}
+                    {variacoes.sort(sortLogico).map(v => (
                       <div key={v.id} className="p-3 flex justify-between items-center hover:bg-gray-50 transition-colors">
                         <div>
-                          <p className="font-bold text-gray-800 text-sm">{v.cor}</p>
-                          <p className="text-xs text-gray-500">Tam: <span className="font-bold text-blue-600">{v.tam}</span> | Saco: {v.saco || '-'}</p>
+                          {/* 🔄 VISUAL CORRIGIDO */}
+                          <p className="font-bold text-gray-800 text-sm">Tam: <span className="text-blue-600 font-black">{v.tam}</span> <span className="text-gray-300 font-normal mx-1">|</span> {v.cor}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">Saco: <span className="font-bold">{v.saco || '-'}</span></p>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right hidden sm:block">
@@ -361,9 +364,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
         </div>
       </div>
 
-      {/* ========================================================= */}
-      {/* 🚀 MODAL DE VARIAÇÃO RÁPIDA (O NOVO MODAL) */}
-      {/* ========================================================= */}
+      {/* MODAL VARIAÇÃO RÁPIDA */}
       {modalVariacaoRapidaAberto && (
         <div className="fixed inset-0 bg-black/90 z-[80] flex items-center justify-center p-4" onClick={() => setModalVariacaoRapidaAberto(false)}>
           <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in" onClick={e => e.stopPropagation()}>
@@ -371,13 +372,11 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
               <h3 className="font-black text-gray-800 flex items-center gap-2">✨ Adicionar Variação</h3>
               <button onClick={() => setModalVariacaoRapidaAberto(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full font-bold transition-colors">X</button>
             </div>
-
             <div className="space-y-4">
               <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
                 <p className="text-[10px] font-bold text-blue-500 uppercase">Produto Base</p>
                 <p className="font-black text-blue-900 uppercase truncate">{formVariacaoRapida.nome}</p>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                  <div>
                     <label className="text-xs font-bold text-gray-500 uppercase">Nova Cor</label>
@@ -388,12 +387,10 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                     <input type="text" className="w-full p-3 border-2 border-gray-200 rounded-xl font-black uppercase mt-1 focus:border-green-500 outline-none text-center" placeholder="Ex: M" value={formVariacaoRapida.tam} onChange={e => setFormVariacaoRapida({...formVariacaoRapida, tam: e.target.value})} />
                  </div>
               </div>
-
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Saco / Local (Opcional)</label>
                 <input type="text" className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold uppercase mt-1 focus:border-green-500 outline-none" placeholder="Ex: SACO 4" value={formVariacaoRapida.saco} onChange={e => setFormVariacaoRapida({...formVariacaoRapida, saco: e.target.value})} />
               </div>
-
               <button onClick={salvarVariacaoRapida} className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl mt-2 active:scale-95 transition-colors uppercase tracking-widest shadow-md">
                 Salvar Variação
               </button>
@@ -402,10 +399,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
         </div>
       )}
 
-
-      {/* ========================================================= */}
-      {/* MODAL WIZARD (CRIAR / EDITAR VARIAÇÃO EXISTENTE) */}
-      {/* ========================================================= */}
+      {/* MODAL WIZARD EDIÇÃO COMPLETA */}
       {modalPassosAberto && (
          <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4" onClick={() => setModalPassosAberto(false)}>
          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -445,7 +439,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                    </div>
                  </div>
 
-                 {/* CAMPO DE CUSTO */}
                  <div className={`p-3 rounded-xl border mt-2 ${editandoId ? 'bg-gray-100 border-gray-200' : 'bg-yellow-50 border-yellow-200'}`}>
                    <label className={`text-xs font-bold uppercase block mb-1 ${editandoId ? 'text-gray-400' : 'text-yellow-700'}`}>Custo de Produção</label>
                    <input disabled={editandoId !== null} type="number" className="w-full p-2 bg-transparent border-b-2 border-gray-300 outline-none font-bold" placeholder="R$ 0.00" value={formBase.custo} onChange={e => setFormBase({...formBase, custo: e.target.value})} />
@@ -586,9 +579,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
        </div>
       )}
 
-      {/* ========================================================= */}
-      {/* MODAL PARA EDITAR DADOS GERAIS DO PRODUTO (NOME, PREÇOS E CUSTO) */}
-      {/* ========================================================= */}
+      {/* MODAL EDICAO MASSA */}
       {modalEdicaoMassaAberto && (
         <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4" onClick={() => setModalEdicaoMassaAberto(false)}>
           <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in" onClick={e => e.stopPropagation()}>
