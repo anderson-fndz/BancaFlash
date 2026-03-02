@@ -11,10 +11,10 @@ import CarrinhoFlutuante from './components/CarrinhoFlutuante';
 import GerenciarEstoque from './components/GerenciarEstoque';
 import ModalResumoDia from './components/ModalResumoDia';
 import LocalizadorEstoque from './components/LocalizadorEstoque';
+import ModalReposicao from './components/ModalReposicao'; // 📦 Novo Modal de Reposição
 import DashboardBI from './components/DashboardBI';
 
 export default function App() {
-  // 🔐 ESTADOS DE AUTENTICAÇÃO
   const [sessao, setSessao] = useState(null);
   const [verificandoSessao, setVerificandoSessao] = useState(true);
 
@@ -30,9 +30,9 @@ export default function App() {
   const [modalAdminAberto, setModalAdminAberto] = useState(false);
   const [modalResumoAberto, setModalResumoAberto] = useState(false);
   const [modalLocalizadorAberto, setModalLocalizadorAberto] = useState(false);
+  const [modalReposicaoAberto, setModalReposicaoAberto] = useState(false); // 📦 Estado da Reposição
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
 
-  // 🔐 VERIFICAR LOGIN QUANDO O APP ABRE E ESCUTAR MUDANÇAS
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSessao(session);
@@ -46,10 +46,16 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 🛡️ CORREÇÃO ANTI-PISCA: Só busca produtos quando o ID do usuário de fato mudar
+  // 🛡️ CORREÇÃO ANTI-VAZAMENTO E ANTI-PISCA
   useEffect(() => {
     if (sessao?.user?.id) {
+      setProdutos([]);
+      setCarrinho([]);
       buscarProdutos();
+    } else {
+      setProdutos([]);
+      setCarrinho([]);
+      setTelaAtiva('PDV');
     }
   }, [sessao?.user?.id]);
 
@@ -132,7 +138,8 @@ export default function App() {
         quantidade: item.quantidade, 
         preco_unitario: item.precoVendido, 
         total_item: item.quantidade * item.precoVendido,
-        forma_pagamento: formaPagamento
+        forma_pagamento: formaPagamento,
+        user_id: sessao.user.id // Garante que a venda tenha o crachá do usuário logado
       });
     }
     
@@ -144,10 +151,8 @@ export default function App() {
     toast.success("Venda finalizada com sucesso!");
   };
 
-  // 🔐 SE ESTIVER CHECANDO SESSÃO, MOSTRA TELA DE CARREGAMENTO
   if (verificandoSessao) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-gray-50">Iniciando BancaFlash... ⚡</div>;
 
-  // 🔐 SE NÃO TIVER LOGADO, RENDERIZA SÓ A TELA DE LOGIN
   if (!sessao) {
     return (
       <>
@@ -157,26 +162,22 @@ export default function App() {
     );
   }
 
-  // TELA DE CARREGAMENTO DOS PRODUTOS
   if (carregando && produtos.length === 0) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-gray-50">Sincronizando sua Banca... ⏳</div>;
 
-  // ==========================================
-  // O APLICATIVO REAL COMEÇA AQUI
-  // ==========================================
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
-      
       <Toaster position="top-center" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
 
       <Sidebar 
         telaAtiva={telaAtiva} setTelaAtiva={setTelaAtiva}
-        setModalAdminAberto={setModalAdminAberto} setModalResumoAberto={setModalResumoAberto} setModalLocalizadorAberto={setModalLocalizadorAberto}
+        setModalAdminAberto={setModalAdminAberto} 
+        setModalResumoAberto={setModalResumoAberto} 
+        setModalLocalizadorAberto={setModalLocalizadorAberto}
+        setModalReposicaoAberto={setModalReposicaoAberto} // 📦 Passando pro Sidebar
         menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto}
       />
 
       <div className="flex-1 flex flex-col h-full overflow-hidden relative pt-14 md:pt-0">
-        
-        {/* Header recebe as funções ou estados que precisa (o logout já está lá dentro agora) */}
         <Header setMenuMobileAberto={setMenuMobileAberto} />        
         
         <main className="flex-1 overflow-y-auto relative">
@@ -208,6 +209,12 @@ export default function App() {
       <LocalizadorEstoque 
         aberto={modalLocalizadorAberto} fechar={() => setModalLocalizadorAberto(false)}
         produtos={produtos} transferirParaBanca={transferirParaBanca}
+      />
+
+      {/* 📦 NOVO COMPONENTE DE REPOSIÇÃO */}
+      <ModalReposicao
+        aberto={modalReposicaoAberto} fechar={() => setModalReposicaoAberto(false)}
+        produtos={produtos} buscarProdutos={buscarProdutos}
       />
 
       <ModalResumoDia 

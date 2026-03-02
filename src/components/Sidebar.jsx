@@ -1,73 +1,121 @@
 import React from 'react';
 
-export default function Sidebar({ telaAtiva, setTelaAtiva, setModalAdminAberto, setModalResumoAberto, setModalLocalizadorAberto, menuMobileAberto, setMenuMobileAberto }) {
+export default function Sidebar({ 
+  telaAtiva, 
+  setTelaAtiva, 
+  setModalAdminAberto, 
+  setModalResumoAberto, 
+  setModalLocalizadorAberto, 
+  setModalReposicaoAberto, 
+  menuMobileAberto, 
+  setMenuMobileAberto 
+}) {
   
-  const fecharMenuNoMobile = () => setMenuMobileAberto(false);
+  const menuPrincipal = [
+    { id: 'PDV', nome: 'Ponto de Venda', icone: '🛒' },
+    { id: 'BI', nome: 'Dashboard (BI)', icone: '📈' }
+  ];
 
   return (
     <>
-      {/* OVERLAY ESCURO NO MOBILE (Fundo preto transparente quando o menu abre) */}
+      {/* Overlay fundo escuro no Mobile */}
       {menuMobileAberto && (
         <div 
-          className="md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity" 
-          onClick={fecharMenuNoMobile}
+          className="fixed inset-0 bg-black/60 z-40 md:hidden animate-fade-in" 
+          onClick={() => setMenuMobileAberto(false)}
         ></div>
       )}
 
-      {/* A BARRA LATERAL */}
+      {/* Sidebar Principal */}
       <aside className={`
-        bg-gray-900 text-white w-64 h-full shadow-2xl z-50 flex flex-col 
-        fixed md:relative top-0 left-0 transition-transform duration-300 ease-in-out
+        fixed md:static inset-y-0 left-0 z-50
+        w-64 bg-gray-900 text-white flex flex-col transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
         ${menuMobileAberto ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         
-        {/* LOGO NO MENU MOBILE (Pra não ficar vazio em cima) */}
-        <div className="md:hidden flex justify-between items-center p-5 border-b border-gray-800">
-          <span className="font-black italic text-xl text-blue-400">⚡ BancaFlash</span>
-          <button onClick={fecharMenuNoMobile} className="text-gray-400 font-bold text-xl">X</button>
-        </div>
-
-        <div className="p-4 space-y-2 mt-4">
-          <p className="text-gray-500 text-xs font-bold uppercase mb-2 tracking-wider">Principal</p>
-          
+        {/* Header da Sidebar */}
+        <div className="h-14 md:h-16 flex items-center justify-between px-6 border-b border-gray-800 shrink-0 bg-gray-950/50">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl drop-shadow-md">⚡</span>
+            <span className="font-black italic text-xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
+              BancaFlash
+            </span>
+          </div>
           <button 
-            onClick={() => { setTelaAtiva('PDV'); fecharMenuNoMobile(); }} 
-            className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-colors ${telaAtiva === 'PDV' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-800'}`}
+            onClick={() => setMenuMobileAberto(false)}
+            className="md:hidden text-gray-400 hover:text-white text-xl p-2 active:scale-95"
           >
-            <span className="text-xl">🛒</span> Ponto de Venda
-          </button>
-          
-          <button 
-            onClick={() => { setTelaAtiva('BI'); fecharMenuNoMobile(); }} 
-            className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold transition-colors ${telaAtiva === 'BI' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-800'}`}
-          >
-            <span className="text-xl">📈</span> Dashboard (BI)
+            ✕
           </button>
         </div>
 
-        <div className="p-4 space-y-2 border-t border-gray-800 mt-auto">
-          <p className="text-gray-500 text-xs font-bold uppercase mb-2 tracking-wider">Ferramentas</p>
+        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8 custom-scrollbar">
           
-          <button 
-            onClick={() => { setModalLocalizadorAberto(true); fecharMenuNoMobile(); }} 
-            className="w-full flex items-center gap-3 p-3 rounded-xl font-bold text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-          >
-            <span className="text-xl text-blue-400">🔍</span> Localizador
-          </button>
-          
-          <button 
-            onClick={() => { setModalResumoAberto(true); fecharMenuNoMobile(); }} 
-            className="w-full flex items-center gap-3 p-3 rounded-xl font-bold text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-          >
-            <span className="text-xl text-green-400">📊</span> Fechamento
-          </button>
-          
-          <button 
-            onClick={() => { setModalAdminAberto(true); fecharMenuNoMobile(); }} 
-            className="w-full flex items-center gap-3 p-3 rounded-xl font-bold text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
-          >
-            <span className="text-xl text-gray-300">⚙️</span> Estoque
-          </button>
+          {/* Seção PRINCIPAL */}
+          <div>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-2">Principal</p>
+            <div className="space-y-1">
+              {menuPrincipal.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => { setTelaAtiva(item.id); setMenuMobileAberto(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all active:scale-95
+                    ${telaAtiva === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}
+                  `}
+                >
+                  <span className="text-lg">{item.icone}</span>
+                  {item.nome}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Seção FERRAMENTAS */}
+          <div>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-2">Ferramentas</p>
+            <div className="space-y-1">
+              
+              <button
+                onClick={() => { setModalLocalizadorAberto(true); setMenuMobileAberto(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-gray-400 hover:bg-gray-800 hover:text-gray-100 transition-all active:scale-95"
+              >
+                <span className="text-lg">🔍</span>
+                Localizador
+              </button>
+
+              {/* 📦 NOVO BOTÃO DE REPOSIÇÃO AQUI COM DESTAQUE */}
+              <button
+                onClick={() => { setModalReposicaoAberto(true); setMenuMobileAberto(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-green-400 hover:bg-gray-800 hover:text-green-300 transition-all active:scale-95 border border-transparent hover:border-green-900/50 bg-green-900/10"
+              >
+                <span className="text-lg drop-shadow-md">📦</span>
+                Reposição (Entrada)
+              </button>
+
+              <button
+                onClick={() => { setModalResumoAberto(true); setMenuMobileAberto(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-gray-400 hover:bg-gray-800 hover:text-gray-100 transition-all active:scale-95"
+              >
+                <span className="text-lg">📊</span>
+                Fechamento
+              </button>
+
+              <button
+                onClick={() => { setModalAdminAberto(true); setMenuMobileAberto(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-gray-400 hover:bg-gray-800 hover:text-gray-100 transition-all active:scale-95"
+              >
+                <span className="text-lg">⚙️</span>
+                Gerenciar Produtos
+              </button>
+
+            </div>
+          </div>
+
+        </div>
+        
+        {/* Footer da Sidebar */}
+        <div className="p-4 border-t border-gray-800 text-center bg-gray-950/30">
+          <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">BancaFlash v1.0</p>
         </div>
       </aside>
     </>
