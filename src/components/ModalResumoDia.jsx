@@ -6,9 +6,10 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
   const [vendasHoje, setVendasHoje] = useState([]);
   const [abaAtiva, setAbaAtiva] = useState('resumo');
 
-  // ✨ ESTADOS PARA A EDIÇÃO DE VENDAS
+  // ✨ ESTADOS DA EDIÇÃO
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
   const [vendaEditando, setVendaEditando] = useState(null);
+  const [itensDeletados, setItensDeletados] = useState([]); // Guarda o que foi apagado pra remover do banco
 
   useEffect(() => {
     if (aberto) buscarVendasDoDia();
@@ -28,15 +29,16 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
   const faturamentoTotal = faturamentoDinheiro + faturamentoPix;
   const pecasVendidas = vendasHoje.reduce((acc, v) => acc + v.quantidade, 0);
 
+  const limparTamanho = (t) => String(t || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
   const ordemTamanhos = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', 'G4', 'U'];
   
   const sortLogico = (a, b) => {
-    let idxA = ordemTamanhos.indexOf(a.tam.toUpperCase());
-    let idxB = ordemTamanhos.indexOf(b.tam.toUpperCase());
+    let idxA = ordemTamanhos.indexOf(limparTamanho(a.tam));
+    let idxB = ordemTamanhos.indexOf(limparTamanho(b.tam));
     if (idxA === -1) idxA = 999;
     if (idxB === -1) idxB = 999;
     if (idxA !== idxB) return idxA - idxB;
-    return a.cor.localeCompare(b.cor);
+    return String(a.cor || '').trim().localeCompare(String(b.cor || '').trim());
   };
 
   const reposicaoNecessaria = produtos.map(p => {
@@ -70,7 +72,9 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     toast.success("Lista copiada para o WhatsApp!");
   };
 
-  // ✨ FUNÇÕES DE EDIÇÃO DE VENDAS
+  // ==========================================
+  // LÓGICA DE EDIÇÃO TURBINADA
+  // ==========================================
   const abrirEdicaoVenda = (transacao) => {
     const dataTransacao = new Date(transacao.hora);
     const horas = String(dataTransacao.getHours()).padStart(2, '0');
@@ -83,6 +87,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       forma_pagamento: transacao.forma_pagamento,
       itens: JSON.parse(JSON.stringify(transacao.itens)) 
     });
+    setItensDeletados([]); // Zera a lista de excluídos
     setModalEdicaoAberto(true);
   };
 
@@ -92,7 +97,50 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     setVendaEditando({ ...vendaEditando, itens: novosItens });
   };
 
+  const alterarQtdItem = (index, delta) => {
+    const novosItens = [...vendaEditando.itens];
+    const novaQtd = novosItens[index].quantidade + delta;
+    if (novaQtd > 0) {
+      novosItens[index].quantidade = novaQtd;
+      // Atualiza o subtotal daquele item
+      novosItens[index].total_item = novaQtd * novosItens[index].preco_unitario;
+      setVendaEditando({ ...vendaEditando, itens: novosItens });
+    }
+  };
+
+  const removerItem = (index) => {
+    const novosItens = [...vendaEditando.itens];
+    const removido = novosItens.splice(index, 1)[0];
+    
+    // Se o item já existia no banco, guarda o ID dele pra deletar depois
+    if (!String(removido.id).startsWith('NOVO_')) {
+      setItensDeletados([...itensDeletados, removido.id]);
+    }
+    
+    setVendaEditando({ ...vendaEditando, itens: novosItens });
+  };
+
+  const adicionarNovaPeca = () => {
+    const baseProduto = vendaEditando.itens[0] || { produto_nome: '', preco_unitario: 0 };
+    const novoItem = {
+      id: `NOVO_${Date.now()}`, // ID temporário pra não bugar a tela
+      produto_nome: baseProduto.produto_nome,
+      produto_cor: '',
+      produto_tam: '',
+      quantidade: 1,
+      preco_unitario: baseProduto.preco_unitario,
+      total_item: baseProduto.preco_unitario,
+      forma_pagamento: vendaEditando.forma_pagamento
+    };
+    setVendaEditando({ ...vendaEditando, itens: [...vendaEditando.itens, novoItem] });
+  };
+
   const salvarEdicaoVenda = async () => {
+    if (vendaEditando.itens.length === 0) {
+      toast.error('A venda não pode ficar vazia. Exclua a transação se necessário.');
+      return;
+    }
+
     const loadingId = toast.loading('Atualizando venda...');
 
     try {
@@ -100,21 +148,48 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       const [horas, minutos] = vendaEditando.hora.split(':');
       novaData.setHours(horas, minutos);
 
+      // 1. Apaga os itens que o usuário deletou na tela
+      if (itensDeletados.length > 0) {
+        await supabase.from('vendas').delete().in('id', itensDeletados);
+      }
+
+      // 2. Processa as peças (Atualiza as antigas e Insere as novas)
+      for (const item of vendaEditando.itens) {
+        if (String(item.id).startsWith('NOVO_')) {
+          // É UMA PEÇA NOVA QUE VOCÊ ADICIONOU NO BOTÃO
+          const novoRegistro = {
+            transacao_id: vendaEditando.transacao_id,
+            produto_nome: item.produto_nome.trim().toUpperCase(),
+            produto_cor: item.produto_cor.trim().toUpperCase() || 'PENDENTE',
+            produto_tam: item.produto_tam.trim().toUpperCase(),
+            quantidade: item.quantidade,
+            preco_unitario: item.preco_unitario,
+            total_item: item.quantidade * item.preco_unitario,
+            forma_pagamento: vendaEditando.forma_pagamento,
+            created_at: novaData.toISOString()
+          };
+          await supabase.from('vendas').insert([novoRegistro]);
+        } else {
+          // É UMA PEÇA QUE JÁ EXISTIA (SÓ FOI EDITADA)
+          await supabase.from('vendas')
+            .update({
+              produto_nome: item.produto_nome.trim().toUpperCase(),
+              produto_cor: item.produto_cor.trim().toUpperCase(),
+              produto_tam: item.produto_tam.trim().toUpperCase(),
+              quantidade: item.quantidade,
+              total_item: item.quantidade * item.preco_unitario
+            })
+            .eq('id', item.id);
+        }
+      }
+
+      // 3. Atualiza o horário e pagamento em todos os itens daquela transação
       await supabase.from('vendas')
         .update({ 
           created_at: novaData.toISOString(),
           forma_pagamento: vendaEditando.forma_pagamento 
         })
         .eq('transacao_id', vendaEditando.transacao_id);
-
-      for (const item of vendaEditando.itens) {
-        await supabase.from('vendas')
-          .update({
-            produto_cor: item.produto_cor.trim().toUpperCase(),
-            produto_tam: item.produto_tam.trim().toUpperCase()
-          })
-          .eq('id', item.id);
-      }
 
       await buscarVendasDoDia();
       setModalEdicaoAberto(false);
@@ -218,7 +293,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                       {t.itens.map(item => (
                         <div key={item.id} className="flex justify-between text-xs md:text-sm border-l-2 border-transparent hover:border-blue-300 pl-2 transition-all">
                           <span className="text-gray-600"><span className="font-bold text-gray-900">{item.quantidade}x</span> {item.produto_nome} (Tam: {item.produto_tam} | {item.produto_cor})</span>
-                          <span className="font-bold text-gray-800">R$ {(item.quantidade * item.preco_unitario).toFixed(2)}</span>
+                          <span className="font-bold text-gray-800">R$ {parseFloat(item.total_item).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
@@ -238,16 +313,20 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
         </div>
       </div>
 
+      {/* ========================================== */}
+      {/* MODAL DE EDIÇÃO AVANÇADA (COM QUANTIDADE E ADICIONAR ITEM) */}
+      {/* ========================================== */}
       {modalEdicaoAberto && vendaEditando && (
         <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4" onClick={() => setModalEdicaoAberto(false)}>
-          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center border-b pb-3 mb-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b pb-3 mb-4 shrink-0">
               <h3 className="font-black text-gray-800 flex items-center gap-2">✏️ Corrigir Venda</h3>
               <button onClick={() => setModalEdicaoAberto(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full font-bold transition-colors">X</button>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+            <div className="overflow-y-auto custom-scrollbar pr-2 flex-1 space-y-4">
+              
+              <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200 shrink-0">
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 uppercase">Horário</label>
                   <input 
@@ -272,28 +351,50 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
               </div>
 
               <div>
-                <p className="text-xs font-black text-gray-800 uppercase mb-2 border-b pb-1">Peças da Venda:</p>
-                <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+                <p className="text-xs font-black text-gray-800 uppercase mb-2 border-b pb-1">Itens da Venda:</p>
+                <div className="space-y-4">
                   {vendaEditando.itens.map((item, index) => (
-                    <div key={item.id} className="bg-blue-50 p-3 rounded-xl border border-blue-100">
-                      <p className="text-[11px] font-black text-blue-900 uppercase mb-2 leading-tight">
-                        {item.quantidade}x {item.produto_nome}
-                      </p>
+                    <div key={item.id} className="bg-blue-50 p-3 rounded-xl border border-blue-200 shadow-sm relative">
+                      
+                      {/* BOTÕES DE QUANTIDADE E LIXEIRA */}
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-1 bg-white border border-blue-200 p-1 rounded-lg">
+                          <button onClick={() => alterarQtdItem(index, -1)} className="w-6 h-6 rounded flex items-center justify-center text-blue-600 font-black hover:bg-blue-50 active:scale-95">-</button>
+                          <span className="font-black text-sm w-5 text-center">{item.quantidade}</span>
+                          <button onClick={() => alterarQtdItem(index, 1)} className="w-6 h-6 rounded flex items-center justify-center text-blue-600 font-black hover:bg-blue-50 active:scale-95">+</button>
+                        </div>
+                        <button onClick={() => removerItem(index)} className="text-[10px] font-bold text-red-500 hover:text-red-700 uppercase tracking-widest flex items-center gap-1 bg-red-50 px-2 py-1 rounded">
+                          🗑️ Remover
+                        </button>
+                      </div>
+
+                      {/* NOME DO PRODUTO EDITÁVEL */}
+                      <div className="mb-2">
+                        <label className="text-[9px] font-bold text-blue-600 uppercase">Produto</label>
+                        <input 
+                          type="text" 
+                          className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-0.5 focus:border-blue-500 outline-none bg-white" 
+                          value={item.produto_nome} 
+                          onChange={e => atualizarItemVenda(index, 'produto_nome', e.target.value)} 
+                        />
+                      </div>
+
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[9px] font-bold text-blue-600 uppercase">Cor Real</label>
+                          <label className="text-[9px] font-bold text-blue-600 uppercase">Cor</label>
                           <input 
                             type="text" 
-                            className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-1 focus:border-blue-500 outline-none" 
+                            placeholder="Ex: AZUL"
+                            className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-0.5 focus:border-blue-500 outline-none bg-white" 
                             value={item.produto_cor} 
                             onChange={e => atualizarItemVenda(index, 'produto_cor', e.target.value)} 
                           />
                         </div>
                         <div>
-                          <label className="text-[9px] font-bold text-blue-600 uppercase">Tamanho Real</label>
+                          <label className="text-[9px] font-bold text-blue-600 uppercase">Tamanho</label>
                           <input 
                             type="text" 
-                            className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-1 focus:border-blue-500 outline-none text-center" 
+                            className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-0.5 focus:border-blue-500 outline-none text-center bg-white" 
                             value={item.produto_tam} 
                             onChange={e => atualizarItemVenda(index, 'produto_tam', e.target.value)} 
                           />
@@ -302,15 +403,27 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                     </div>
                   ))}
                 </div>
-              </div>
 
+                {/* BOTÃO ADICIONAR PEÇA */}
+                <button 
+                  onClick={adicionarNovaPeca}
+                  className="w-full mt-3 border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 font-black py-3 rounded-xl uppercase tracking-widest text-xs transition-all active:scale-95 flex justify-center items-center gap-1"
+                >
+                  ➕ Adicionar Peça a esta venda
+                </button>
+
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-gray-100 shrink-0">
               <button 
                 onClick={salvarEdicaoVenda} 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl mt-2 active:scale-95 transition-colors uppercase tracking-widest shadow-md"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl active:scale-95 transition-colors uppercase tracking-widest shadow-md"
               >
                 Salvar Correções
               </button>
             </div>
+
           </div>
         </div>
       )}
