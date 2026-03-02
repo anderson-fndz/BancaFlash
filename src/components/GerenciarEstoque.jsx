@@ -21,9 +21,10 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   const [modalEdicaoMassaAberto, setModalEdicaoMassaAberto] = useState(false);
   const [formEdicaoMassa, setFormEdicaoMassa] = useState({ nomeAntigo: '', nomeNovo: '', preco: '', preco_atacado: '', custo: '' });
 
+  // ✨ ESTADO DA VARIAÇÃO RÁPIDA ATUALIZADO (Agora aceita um array de tamanhos)
   const [modalVariacaoRapidaAberto, setModalVariacaoRapidaAberto] = useState(false);
   const [formVariacaoRapida, setFormVariacaoRapida] = useState({
-    nome: '', preco: 0, preco_atacado: 0, custo: 0, cor: '', tam: '', saco: '', meta_banca: 3, meta_global: 6
+    nome: '', preco: 0, preco_atacado: 0, custo: 0, cor: '', tamanhos: [], saco: '', meta_banca: 3, meta_global: 6
   });
 
   if (!aberto) return null;
@@ -33,15 +34,16 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
 
   const tamanhosComuns = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', 'G4', 'U'];
 
-  // 🧠 A VACINA DA ORDENAÇÃO AQUI
+  const limparTamanho = (t) => String(t || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
   const ordemTamanhos = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', 'G4', 'U'];
+  
   const sortLogico = (a, b) => {
-    let idxA = ordemTamanhos.indexOf(String(a.tam || '').trim().toUpperCase());
-    let idxB = ordemTamanhos.indexOf(String(b.tam || '').trim().toUpperCase());
+    let idxA = ordemTamanhos.indexOf(limparTamanho(a.tam));
+    let idxB = ordemTamanhos.indexOf(limparTamanho(b.tam));
     if (idxA === -1) idxA = 999;
     if (idxB === -1) idxB = 999;
     if (idxA !== idxB) return idxA - idxB;
-    return String(a.cor || '').localeCompare(String(b.cor || ''));
+    return String(a.cor || '').trim().localeCompare(String(b.cor || '').trim());
   };
 
   const toggleSanfona = (nomeProduto) => {
@@ -120,6 +122,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     }
   };
 
+  // ✨ FUNÇÃO ATUALIZADA (Reseta o array de tamanhos ao abrir)
   const abrirNovaVariacaoRapida = (produtoBase) => {
     setFormVariacaoRapida({
       nome: produtoBase.nome,
@@ -127,7 +130,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       preco_atacado: produtoBase.preco_atacado || produtoBase.preco,
       custo: produtoBase.custo || 0,
       cor: '',
-      tam: '',
+      tamanhos: [], // Array vazio pra começar
       saco: produtoBase.saco || '',
       meta_banca: produtoBase.meta_banca || 3,
       meta_global: produtoBase.meta_global || 6
@@ -135,38 +138,51 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     setModalVariacaoRapidaAberto(true);
   };
 
+  // ✨ FUNÇÃO PARA CLICAR NOS TAMANHOS DA VARIAÇÃO RÁPIDA
+  const toggleTamanhoRapido = (tam) => {
+    setFormVariacaoRapida(prev => {
+      if (prev.tamanhos.includes(tam)) {
+        return { ...prev, tamanhos: prev.tamanhos.filter(t => t !== tam) };
+      } else {
+        return { ...prev, tamanhos: [...prev.tamanhos, tam] };
+      }
+    });
+  };
+
+  // ✨ FUNÇÃO ATUALIZADA (Salva várias variações de uma vez)
   const salvarVariacaoRapida = async () => {
-    if (!formVariacaoRapida.cor.trim() || !formVariacaoRapida.tam.trim()) {
-      toast.error("Preencha a cor e o tamanho!");
+    if (!formVariacaoRapida.cor.trim() || formVariacaoRapida.tamanhos.length === 0) {
+      toast.error("Preencha a cor e selecione pelo menos 1 tamanho!");
       return;
     }
 
-    const loadingId = toast.loading("Adicionando nova variação...");
+    const loadingId = toast.loading(`Adicionando ${formVariacaoRapida.tamanhos.length} nova(s) variação(ões)...`);
 
-    const registro = {
+    // Cria um registro para cada tamanho selecionado
+    const registros = formVariacaoRapida.tamanhos.map(tam => ({
       nome: formVariacaoRapida.nome,
       preco: formVariacaoRapida.preco,
       preco_atacado: formVariacaoRapida.preco_atacado,
       custo: formVariacaoRapida.custo,
       cor: formVariacaoRapida.cor.trim().toUpperCase(),
-      tam: formVariacaoRapida.tam.trim().toUpperCase(),
+      tam: tam.trim().toUpperCase(),
       saco: formVariacaoRapida.saco.trim().toUpperCase(),
       estoque_banca: 0,
       estoque_saco: 0,
       meta_banca: formVariacaoRapida.meta_banca,
       meta_global: formVariacaoRapida.meta_global
-    };
+    }));
 
-    const { error } = await supabase.from('produtos').insert([registro]);
+    const { error } = await supabase.from('produtos').insert(registros);
 
     if (error) {
-      toast.error("Erro ao salvar variação!", { id: loadingId });
+      toast.error("Erro ao salvar variações!", { id: loadingId });
       console.error(error);
     } else {
       await buscarProdutos();
       setModalVariacaoRapidaAberto(false);
       setExpandidos(prev => ({ ...prev, [formVariacaoRapida.nome]: true }));
-      toast.success("Nova variação adicionada!", { id: loadingId });
+      toast.success(`Foram adicionadas ${registros.length} novas variações!`, { id: loadingId });
     }
   };
 
@@ -336,11 +352,9 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                 
                 {estaExpandido && (
                   <div className="divide-y divide-gray-100 animate-fade-in bg-white">
-                    {/* 🧠 APLICANDO A ORDENAÇÃO AQUI */}
                     {variacoes.sort(sortLogico).map(v => (
                       <div key={v.id} className="p-3 flex justify-between items-center hover:bg-gray-50 transition-colors">
                         <div>
-                          {/* 🔄 VISUAL CORRIGIDO */}
                           <p className="font-bold text-gray-800 text-sm">Tam: <span className="text-blue-600 font-black">{v.tam}</span> <span className="text-gray-300 font-normal mx-1">|</span> {v.cor}</p>
                           <p className="text-xs text-gray-500 mt-0.5">Saco: <span className="font-bold">{v.saco || '-'}</span></p>
                         </div>
@@ -364,7 +378,9 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
         </div>
       </div>
 
-      {/* MODAL VARIAÇÃO RÁPIDA */}
+      {/* ========================================================= */}
+      {/* ✨ MODAL VARIAÇÃO RÁPIDA (COM DATALIST E MÚLTIPLOS TAMANHOS) */}
+      {/* ========================================================= */}
       {modalVariacaoRapidaAberto && (
         <div className="fixed inset-0 bg-black/90 z-[80] flex items-center justify-center p-4" onClick={() => setModalVariacaoRapidaAberto(false)}>
           <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in" onClick={e => e.stopPropagation()}>
@@ -372,27 +388,59 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
               <h3 className="font-black text-gray-800 flex items-center gap-2">✨ Adicionar Variação</h3>
               <button onClick={() => setModalVariacaoRapidaAberto(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full font-bold transition-colors">X</button>
             </div>
+            
             <div className="space-y-4">
               <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
                 <p className="text-[10px] font-bold text-blue-500 uppercase">Produto Base</p>
                 <p className="font-black text-blue-900 uppercase truncate">{formVariacaoRapida.nome}</p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                 <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Nova Cor</label>
-                    <input type="text" className="w-full p-3 border-2 border-gray-200 rounded-xl font-black uppercase mt-1 focus:border-green-500 outline-none" placeholder="Ex: CRU" value={formVariacaoRapida.cor} onChange={e => setFormVariacaoRapida({...formVariacaoRapida, cor: e.target.value})} />
-                 </div>
-                 <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Tamanho</label>
-                    <input type="text" className="w-full p-3 border-2 border-gray-200 rounded-xl font-black uppercase mt-1 focus:border-green-500 outline-none text-center" placeholder="Ex: M" value={formVariacaoRapida.tam} onChange={e => setFormVariacaoRapida({...formVariacaoRapida, tam: e.target.value})} />
-                 </div>
+
+              {/* ✨ INPUT COM DATALIST DE CORES EXISTENTES */}
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase">Nova Cor (Ou selecione uma)</label>
+                <input 
+                  type="text" 
+                  list={`lista-cores-rapidas`}
+                  className="w-full p-3 border-2 border-gray-200 rounded-xl font-black uppercase mt-1 focus:border-green-500 outline-none" 
+                  placeholder="Ex: AZUL MARINHO" 
+                  value={formVariacaoRapida.cor} 
+                  onChange={e => setFormVariacaoRapida({...formVariacaoRapida, cor: e.target.value})} 
+                />
+                <datalist id={`lista-cores-rapidas`}>
+                  {/* Pega as cores únicas já cadastradas desse produto específico */}
+                  {[...new Set(produtos.filter(p => p.nome === formVariacaoRapida.nome).map(p => p.cor))].sort().map(c => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
               </div>
+
+              {/* ✨ BOTÕES DE MÚLTIPLOS TAMANHOS */}
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Selecione os Tamanhos dessa cor</label>
+                <div className="flex flex-wrap gap-2 justify-center bg-gray-50 p-3 rounded-xl border border-gray-200">
+                  {tamanhosComuns.map(tam => (
+                    <button 
+                      key={tam} 
+                      onClick={() => toggleTamanhoRapido(tam)}
+                      className={`w-11 h-11 rounded-xl font-black text-sm transition-all border-2 active:scale-95 
+                        ${formVariacaoRapida.tamanhos.includes(tam) ? 'bg-green-500 text-white border-green-600 shadow-md scale-105' : 'bg-white text-gray-500 border-gray-200 hover:border-green-300'}`}
+                    >
+                      {tam}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-gray-500 uppercase">Saco / Local (Opcional)</label>
                 <input type="text" className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold uppercase mt-1 focus:border-green-500 outline-none" placeholder="Ex: SACO 4" value={formVariacaoRapida.saco} onChange={e => setFormVariacaoRapida({...formVariacaoRapida, saco: e.target.value})} />
               </div>
-              <button onClick={salvarVariacaoRapida} className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl mt-2 active:scale-95 transition-colors uppercase tracking-widest shadow-md">
-                Salvar Variação
+
+              <button 
+                onClick={salvarVariacaoRapida} 
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl mt-2 active:scale-95 transition-colors uppercase tracking-widest shadow-md"
+              >
+                💾 Salvar {formVariacaoRapida.tamanhos.length > 0 ? formVariacaoRapida.tamanhos.length : ''} Variações
               </button>
             </div>
           </div>

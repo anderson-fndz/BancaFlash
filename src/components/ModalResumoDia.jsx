@@ -6,10 +6,9 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
   const [vendasHoje, setVendasHoje] = useState([]);
   const [abaAtiva, setAbaAtiva] = useState('resumo');
 
-  // ✨ ESTADOS DA EDIÇÃO
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
   const [vendaEditando, setVendaEditando] = useState(null);
-  const [itensDeletados, setItensDeletados] = useState([]); // Guarda o que foi apagado pra remover do banco
+  const [itensDeletados, setItensDeletados] = useState([]); 
 
   useEffect(() => {
     if (aberto) buscarVendasDoDia();
@@ -72,9 +71,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     toast.success("Lista copiada para o WhatsApp!");
   };
 
-  // ==========================================
-  // LÓGICA DE EDIÇÃO TURBINADA
-  // ==========================================
   const abrirEdicaoVenda = (transacao) => {
     const dataTransacao = new Date(transacao.hora);
     const horas = String(dataTransacao.getHours()).padStart(2, '0');
@@ -87,7 +83,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       forma_pagamento: transacao.forma_pagamento,
       itens: JSON.parse(JSON.stringify(transacao.itens)) 
     });
-    setItensDeletados([]); // Zera a lista de excluídos
+    setItensDeletados([]); 
     setModalEdicaoAberto(true);
   };
 
@@ -102,7 +98,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     const novaQtd = novosItens[index].quantidade + delta;
     if (novaQtd > 0) {
       novosItens[index].quantidade = novaQtd;
-      // Atualiza o subtotal daquele item
       novosItens[index].total_item = novaQtd * novosItens[index].preco_unitario;
       setVendaEditando({ ...vendaEditando, itens: novosItens });
     }
@@ -112,7 +107,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     const novosItens = [...vendaEditando.itens];
     const removido = novosItens.splice(index, 1)[0];
     
-    // Se o item já existia no banco, guarda o ID dele pra deletar depois
     if (!String(removido.id).startsWith('NOVO_')) {
       setItensDeletados([...itensDeletados, removido.id]);
     }
@@ -123,7 +117,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
   const adicionarNovaPeca = () => {
     const baseProduto = vendaEditando.itens[0] || { produto_nome: '', preco_unitario: 0 };
     const novoItem = {
-      id: `NOVO_${Date.now()}`, // ID temporário pra não bugar a tela
+      id: `NOVO_${Date.now()}`, 
       produto_nome: baseProduto.produto_nome,
       produto_cor: '',
       produto_tam: '',
@@ -148,15 +142,12 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       const [horas, minutos] = vendaEditando.hora.split(':');
       novaData.setHours(horas, minutos);
 
-      // 1. Apaga os itens que o usuário deletou na tela
       if (itensDeletados.length > 0) {
         await supabase.from('vendas').delete().in('id', itensDeletados);
       }
 
-      // 2. Processa as peças (Atualiza as antigas e Insere as novas)
       for (const item of vendaEditando.itens) {
         if (String(item.id).startsWith('NOVO_')) {
-          // É UMA PEÇA NOVA QUE VOCÊ ADICIONOU NO BOTÃO
           const novoRegistro = {
             transacao_id: vendaEditando.transacao_id,
             produto_nome: item.produto_nome.trim().toUpperCase(),
@@ -170,7 +161,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
           };
           await supabase.from('vendas').insert([novoRegistro]);
         } else {
-          // É UMA PEÇA QUE JÁ EXISTIA (SÓ FOI EDITADA)
           await supabase.from('vendas')
             .update({
               produto_nome: item.produto_nome.trim().toUpperCase(),
@@ -183,7 +173,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
         }
       }
 
-      // 3. Atualiza o horário e pagamento em todos os itens daquela transação
       await supabase.from('vendas')
         .update({ 
           created_at: novaData.toISOString(),
@@ -200,6 +189,9 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       console.error(error);
     }
   };
+
+  // 🧠 LISTA DE NOMES GERAIS PARA O AUTOCOMPLETE
+  const nomesProdutosCadastrados = [...new Set(produtos.map(p => p.nome))].sort();
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={fechar}>
@@ -313,9 +305,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
         </div>
       </div>
 
-      {/* ========================================== */}
-      {/* MODAL DE EDIÇÃO AVANÇADA (COM QUANTIDADE E ADICIONAR ITEM) */}
-      {/* ========================================== */}
       {modalEdicaoAberto && vendaEditando && (
         <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4" onClick={() => setModalEdicaoAberto(false)}>
           <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in flex flex-col max-h-[95vh]" onClick={e => e.stopPropagation()}>
@@ -353,58 +342,78 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
               <div>
                 <p className="text-xs font-black text-gray-800 uppercase mb-2 border-b pb-1">Itens da Venda:</p>
                 <div className="space-y-4">
-                  {vendaEditando.itens.map((item, index) => (
-                    <div key={item.id} className="bg-blue-50 p-3 rounded-xl border border-blue-200 shadow-sm relative">
-                      
-                      {/* BOTÕES DE QUANTIDADE E LIXEIRA */}
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center gap-1 bg-white border border-blue-200 p-1 rounded-lg">
-                          <button onClick={() => alterarQtdItem(index, -1)} className="w-6 h-6 rounded flex items-center justify-center text-blue-600 font-black hover:bg-blue-50 active:scale-95">-</button>
-                          <span className="font-black text-sm w-5 text-center">{item.quantidade}</span>
-                          <button onClick={() => alterarQtdItem(index, 1)} className="w-6 h-6 rounded flex items-center justify-center text-blue-600 font-black hover:bg-blue-50 active:scale-95">+</button>
+                  {vendaEditando.itens.map((item, index) => {
+                    // 🧠 EXTRAINDO AS CORES E TAMANHOS SÓ DESTE PRODUTO PARA O AUTOCOMPLETE
+                    const variacoesDesteProduto = produtos.filter(p => p.nome === item.produto_nome);
+                    const coresDoProduto = [...new Set(variacoesDesteProduto.map(p => p.cor))].sort();
+                    const tamanhosDoProduto = [...new Set(variacoesDesteProduto.map(p => p.tam))];
+
+                    return (
+                      <div key={item.id} className="bg-blue-50 p-3 rounded-xl border border-blue-200 shadow-sm relative">
+                        
+                        <div className="flex justify-between items-center mb-3">
+                          <div className="flex items-center gap-1 bg-white border border-blue-200 p-1 rounded-lg">
+                            <button onClick={() => alterarQtdItem(index, -1)} className="w-6 h-6 rounded flex items-center justify-center text-blue-600 font-black hover:bg-blue-50 active:scale-95">-</button>
+                            <span className="font-black text-sm w-5 text-center">{item.quantidade}</span>
+                            <button onClick={() => alterarQtdItem(index, 1)} className="w-6 h-6 rounded flex items-center justify-center text-blue-600 font-black hover:bg-blue-50 active:scale-95">+</button>
+                          </div>
+                          <button onClick={() => removerItem(index)} className="text-[10px] font-bold text-red-500 hover:text-red-700 uppercase tracking-widest flex items-center gap-1 bg-red-50 px-2 py-1 rounded">
+                            🗑️ Remover
+                          </button>
                         </div>
-                        <button onClick={() => removerItem(index)} className="text-[10px] font-bold text-red-500 hover:text-red-700 uppercase tracking-widest flex items-center gap-1 bg-red-50 px-2 py-1 rounded">
-                          🗑️ Remover
-                        </button>
-                      </div>
 
-                      {/* NOME DO PRODUTO EDITÁVEL */}
-                      <div className="mb-2">
-                        <label className="text-[9px] font-bold text-blue-600 uppercase">Produto</label>
-                        <input 
-                          type="text" 
-                          className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-0.5 focus:border-blue-500 outline-none bg-white" 
-                          value={item.produto_nome} 
-                          onChange={e => atualizarItemVenda(index, 'produto_nome', e.target.value)} 
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[9px] font-bold text-blue-600 uppercase">Cor</label>
+                        {/* LISTA DE NOME DE PRODUTO DINÂMICA */}
+                        <div className="mb-2">
+                          <label className="text-[9px] font-bold text-blue-600 uppercase">Produto</label>
                           <input 
                             type="text" 
-                            placeholder="Ex: AZUL"
+                            list={`lista-nomes-${index}`}
                             className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-0.5 focus:border-blue-500 outline-none bg-white" 
-                            value={item.produto_cor} 
-                            onChange={e => atualizarItemVenda(index, 'produto_cor', e.target.value)} 
+                            value={item.produto_nome} 
+                            onChange={e => atualizarItemVenda(index, 'produto_nome', e.target.value)} 
                           />
+                          <datalist id={`lista-nomes-${index}`}>
+                            {nomesProdutosCadastrados.map(n => <option key={n} value={n} />)}
+                          </datalist>
                         </div>
-                        <div>
-                          <label className="text-[9px] font-bold text-blue-600 uppercase">Tamanho</label>
-                          <input 
-                            type="text" 
-                            className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-0.5 focus:border-blue-500 outline-none text-center bg-white" 
-                            value={item.produto_tam} 
-                            onChange={e => atualizarItemVenda(index, 'produto_tam', e.target.value)} 
-                          />
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {/* LISTA DE CORES DINÂMICA (Puxa só as cores cadastradas para o produto acima) */}
+                          <div>
+                            <label className="text-[9px] font-bold text-blue-600 uppercase">Cor</label>
+                            <input 
+                              type="text" 
+                              list={`lista-cores-${index}`}
+                              placeholder="Ex: AZUL"
+                              className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-0.5 focus:border-blue-500 outline-none bg-white" 
+                              value={item.produto_cor} 
+                              onChange={e => atualizarItemVenda(index, 'produto_cor', e.target.value)} 
+                            />
+                            <datalist id={`lista-cores-${index}`}>
+                              {coresDoProduto.map(c => <option key={c} value={c} />)}
+                            </datalist>
+                          </div>
+                          
+                          {/* LISTA DE TAMANHOS DINÂMICA */}
+                          <div>
+                            <label className="text-[9px] font-bold text-blue-600 uppercase">Tamanho</label>
+                            <input 
+                              type="text" 
+                              list={`lista-tamanhos-${index}`}
+                              className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-0.5 focus:border-blue-500 outline-none text-center bg-white" 
+                              value={item.produto_tam} 
+                              onChange={e => atualizarItemVenda(index, 'produto_tam', e.target.value)} 
+                            />
+                            <datalist id={`lista-tamanhos-${index}`}>
+                              {tamanhosDoProduto.map(t => <option key={t} value={t} />)}
+                            </datalist>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                {/* BOTÃO ADICIONAR PEÇA */}
                 <button 
                   onClick={adicionarNovaPeca}
                   className="w-full mt-3 border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 font-black py-3 rounded-xl uppercase tracking-widest text-xs transition-all active:scale-95 flex justify-center items-center gap-1"
