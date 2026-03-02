@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdutos }) {
   const [busca, setBusca] = useState('');
   
-  // WIZARD DE CRIAÇÃO/EDIÇÃO DE VARIAÇÃO ÚNICA
+  // WIZARD DE CRIAÇÃO/EDIÇÃO DE PRODUTO
   const [modalPassosAberto, setModalPassosAberto] = useState(false);
   const [passoAtual, setPassoAtual] = useState(1);
   const [editandoId, setEditandoId] = useState(null);
@@ -23,6 +23,12 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   // EDIÇÃO EM MASSA DO PRODUTO (NOME, PREÇOS, CUSTO)
   const [modalEdicaoMassaAberto, setModalEdicaoMassaAberto] = useState(false);
   const [formEdicaoMassa, setFormEdicaoMassa] = useState({ nomeAntigo: '', nomeNovo: '', preco: '', preco_atacado: '', custo: '' });
+
+  // ✨ NOVO: ADICIONAR VARIAÇÃO RÁPIDA (Cor/Tam) A UM PRODUTO EXISTENTE
+  const [modalVariacaoRapidaAberto, setModalVariacaoRapidaAberto] = useState(false);
+  const [formVariacaoRapida, setFormVariacaoRapida] = useState({
+    nome: '', preco: 0, preco_atacado: 0, custo: 0, cor: '', tam: '', saco: '', meta_banca: 3, meta_global: 6
+  });
 
   if (!aberto) return null;
 
@@ -90,21 +96,76 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       custo: parseFloat(formEdicaoMassa.custo || 0)
     };
 
+    const loadingId = toast.loading("Atualizando todas as variações...");
     await supabase.from('produtos').update(dadosMassa).eq('nome', formEdicaoMassa.nomeAntigo);
 
     await buscarProdutos();
     setModalEdicaoMassaAberto(false);
-    toast.success("Produto atualizado por completo!");
+    toast.success("Produto atualizado por completo!", { id: loadingId });
   };
 
   const excluirProdutoMassa = async (nomeProduto) => {
     if (window.confirm(`ATENÇÃO: Você tem certeza que deseja excluir o modelo "${nomeProduto}" INTEIRO? Todas as cores e tamanhos serão apagados!`)) {
+      const loadingId = toast.loading("Excluindo modelo...");
       await supabase.from('produtos').delete().eq('nome', nomeProduto);
-      buscarProdutos();
-      toast.success("Modelo inteiro excluído com sucesso!");
+      await buscarProdutos();
+      toast.success("Modelo inteiro excluído com sucesso!", { id: loadingId });
     }
   };
 
+  // ✨ FUNÇÕES DA NOVA VARIAÇÃO RÁPIDA
+  const abrirNovaVariacaoRapida = (produtoBase) => {
+    setFormVariacaoRapida({
+      nome: produtoBase.nome,
+      preco: produtoBase.preco,
+      preco_atacado: produtoBase.preco_atacado || produtoBase.preco,
+      custo: produtoBase.custo || 0,
+      cor: '',
+      tam: '',
+      saco: produtoBase.saco || '',
+      meta_banca: produtoBase.meta_banca || 3,
+      meta_global: produtoBase.meta_global || 6
+    });
+    setModalVariacaoRapidaAberto(true);
+  };
+
+  const salvarVariacaoRapida = async () => {
+    if (!formVariacaoRapida.cor.trim() || !formVariacaoRapida.tam.trim()) {
+      toast.error("Preencha a cor e o tamanho!");
+      return;
+    }
+
+    const loadingId = toast.loading("Adicionando nova variação...");
+
+    const registro = {
+      nome: formVariacaoRapida.nome,
+      preco: formVariacaoRapida.preco,
+      preco_atacado: formVariacaoRapida.preco_atacado,
+      custo: formVariacaoRapida.custo,
+      cor: formVariacaoRapida.cor.trim().toUpperCase(),
+      tam: formVariacaoRapida.tam.trim().toUpperCase(),
+      saco: formVariacaoRapida.saco.trim().toUpperCase(),
+      estoque_banca: 0,
+      estoque_saco: 0,
+      meta_banca: formVariacaoRapida.meta_banca,
+      meta_global: formVariacaoRapida.meta_global
+      // user_id é pego automaticamente pelo banco (DEFAULT auth.uid())
+    };
+
+    const { error } = await supabase.from('produtos').insert([registro]);
+
+    if (error) {
+      toast.error("Erro ao salvar variação!", { id: loadingId });
+      console.error(error);
+    } else {
+      await buscarProdutos();
+      setModalVariacaoRapidaAberto(false);
+      setExpandidos(prev => ({ ...prev, [formVariacaoRapida.nome]: true })); // Expande a sanfona pra mostrar
+      toast.success("Nova variação adicionada!", { id: loadingId });
+    }
+  };
+
+  // WIZARD NORMAL...
   const toggleTamanho = (tam) => {
     if (tamanhosSelecionados.includes(tam)) {
       setTamanhosSelecionados(tamanhosSelecionados.filter(t => t !== tam));
@@ -140,9 +201,11 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       custo: parseFloat(formBase.custo || 0)
     };
 
+    const loadingId = toast.loading("Salvando...");
+
     if (editandoId) {
       if (!formCor.cor.trim()) {
-        toast.error("A cor não pode ficar vazia!");
+        toast.error("A cor não pode ficar vazia!", { id: loadingId });
         return;
       }
       
@@ -164,7 +227,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       }
 
       if (coresFinais.length === 0) {
-        toast.error("Adicione pelo menos uma cor na lista!");
+        toast.error("Adicione pelo menos uma cor na lista!", { id: loadingId });
         return;
       }
 
@@ -193,20 +256,21 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     
     if (fecharModalAposSalvar) {
       setModalPassosAberto(false);
-      toast.success("Produto salvo com sucesso!");
+      toast.success("Produto salvo com sucesso!", { id: loadingId });
     } else {
       setFormCor({ cor: '', saco: formCor.saco, meta_banca: 3, meta_global: 6 });
       setEstoques({});
-      toast.success("Variações salvas! Pode digitar a próxima cor.");
+      toast.success("Variações salvas! Pode digitar a próxima cor.", { id: loadingId });
       document.getElementById('input-cor').focus();
     }
   };
 
   const excluirVariacao = async (id) => {
     if (window.confirm("Certeza que quer excluir essa variação única?")) {
+      const loadingId = toast.loading("Excluindo...");
       await supabase.from('produtos').delete().eq('id', id);
-      buscarProdutos();
-      toast.success("Variação excluída com sucesso!");
+      await buscarProdutos();
+      toast.success("Variação excluída com sucesso!", { id: loadingId });
     }
   };
 
@@ -215,7 +279,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       <div className="bg-gray-50 w-full md:w-[600px] h-full shadow-2xl flex flex-col animate-slide-left" onClick={e => e.stopPropagation()}>
         
         <div className="bg-gray-900 text-white p-5 flex justify-between items-center shadow-md z-10">
-          <h2 className="text-xl font-black italic flex items-center gap-2">⚙️ Controle de Estoque</h2>
+          <h2 className="text-xl font-black italic flex items-center gap-2">⚙️ Gerenciar Produtos</h2>
           <button onClick={fechar} className="text-gray-400 hover:text-white font-bold text-xl active:scale-95">X</button>
         </div>
 
@@ -227,9 +291,9 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
           />
           <button 
             onClick={abrirCriacaoNova} 
-            className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl shadow-md active:scale-95 transition-all"
+            className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl shadow-md active:scale-95 transition-all uppercase tracking-wide"
           >
-            + CADASTRAR NOVO PRODUTO
+            + Cadastrar Novo Modelo
           </button>
         </div>
 
@@ -242,40 +306,49 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
             return (
               <div key={nome} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
                 
-                {/* CABEÇALHO CLICÁVEL (SANFONA + EDIÇÃO EM MASSA) */}
+                {/* CABEÇALHO CLICÁVEL (SANFONA + BOTÕES DE AÇÃO) */}
                 <div className="bg-gray-100 hover:bg-gray-200 p-3 flex justify-between items-center border-b border-gray-200 transition-colors">
                   <div 
                     onClick={() => toggleSanfona(nome)}
                     className="flex items-center gap-2 cursor-pointer select-none flex-1"
                   >
                     <span className="text-gray-400 font-bold text-xs">{estaExpandido ? '▼' : '▶'}</span>
-                    <h3 className="font-black text-gray-800 uppercase tracking-tight">{nome}</h3>
+                    <h3 className="font-black text-gray-800 uppercase tracking-tight truncate max-w-[120px] md:max-w-none">{nome}</h3>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-500 bg-white border px-2 py-1 rounded-lg shadow-sm hidden md:inline-block">Total: {estoqueTotal} un.</span>
+                  <div className="flex items-center gap-1.5 md:gap-2">
+                    <span className="text-xs font-bold text-gray-500 bg-white border px-2 py-1.5 rounded-lg shadow-sm hidden md:inline-block">Total: {estoqueTotal} un.</span>
+                    
+                    {/* NOVO BOTÃO DE VARIAÇÃO RÁPIDA */}
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); abrirNovaVariacaoRapida(variacoes[0]); }} 
+                      className="text-[10px] md:text-xs font-black bg-green-100 text-green-700 px-2 py-1.5 rounded-lg active:scale-95 shadow-sm uppercase border border-green-200 hover:bg-green-200 transition-colors"
+                    >
+                      + Cor/Tam
+                    </button>
+                    
                     <button onClick={(e) => { e.stopPropagation(); abrirEdicaoMassa(nome); }} className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shadow-sm active:scale-95">✏️</button>
                     <button onClick={(e) => { e.stopPropagation(); excluirProdutoMassa(nome); }} className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center shadow-sm active:scale-95">🗑️</button>
                   </div>
                 </div>
                 
-                {/* LISTA DE VARIAÇÕES */}
+                {/* LISTA DE VARIAÇÕES (ORDENADAS POR COR) */}
                 {estaExpandido && (
                   <div className="divide-y divide-gray-100 animate-fade-in bg-white">
-                    {variacoes.map(v => (
+                    {variacoes.sort((a,b) => a.cor.localeCompare(b.cor)).map(v => (
                       <div key={v.id} className="p-3 flex justify-between items-center hover:bg-gray-50 transition-colors">
                         <div>
                           <p className="font-bold text-gray-800 text-sm">{v.cor}</p>
                           <p className="text-xs text-gray-500">Tam: <span className="font-bold text-blue-600">{v.tam}</span> | Saco: {v.saco || '-'}</p>
                         </div>
                         <div className="flex items-center gap-4">
-                          <div className="text-right">
+                          <div className="text-right hidden sm:block">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Banca / Saco</p>
                             <p className="font-black text-gray-700 text-sm">{v.estoque_banca || 0} / {v.estoque_saco || 0}</p>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => abrirEdicaoExistente(v)} className="w-8 h-8 bg-blue-50 text-blue-400 hover:text-blue-600 rounded flex items-center justify-center active:scale-95">✏️</button>
-                            <button onClick={() => excluirVariacao(v.id)} className="w-8 h-8 bg-red-50 text-red-400 hover:text-red-600 rounded flex items-center justify-center active:scale-95">🗑️</button>
+                            <button onClick={() => abrirEdicaoExistente(v)} className="w-8 h-8 bg-blue-50 text-blue-500 hover:bg-blue-100 rounded flex items-center justify-center active:scale-95 border border-blue-100">✏️</button>
+                            <button onClick={() => excluirVariacao(v.id)} className="w-8 h-8 bg-red-50 text-red-500 hover:bg-red-100 rounded flex items-center justify-center active:scale-95 border border-red-100">🗑️</button>
                           </div>
                         </div>
                       </div>
@@ -289,7 +362,49 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
       </div>
 
       {/* ========================================================= */}
-      {/* MODAL WIZARD (CRIAR / EDITAR VARIAÇÃO ÚNICA) */}
+      {/* 🚀 MODAL DE VARIAÇÃO RÁPIDA (O NOVO MODAL) */}
+      {/* ========================================================= */}
+      {modalVariacaoRapidaAberto && (
+        <div className="fixed inset-0 bg-black/90 z-[80] flex items-center justify-center p-4" onClick={() => setModalVariacaoRapidaAberto(false)}>
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b pb-3 mb-4">
+              <h3 className="font-black text-gray-800 flex items-center gap-2">✨ Adicionar Variação</h3>
+              <button onClick={() => setModalVariacaoRapidaAberto(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full font-bold transition-colors">X</button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
+                <p className="text-[10px] font-bold text-blue-500 uppercase">Produto Base</p>
+                <p className="font-black text-blue-900 uppercase truncate">{formVariacaoRapida.nome}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                 <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase">Nova Cor</label>
+                    <input type="text" className="w-full p-3 border-2 border-gray-200 rounded-xl font-black uppercase mt-1 focus:border-green-500 outline-none" placeholder="Ex: CRU" value={formVariacaoRapida.cor} onChange={e => setFormVariacaoRapida({...formVariacaoRapida, cor: e.target.value})} />
+                 </div>
+                 <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase">Tamanho</label>
+                    <input type="text" className="w-full p-3 border-2 border-gray-200 rounded-xl font-black uppercase mt-1 focus:border-green-500 outline-none text-center" placeholder="Ex: M" value={formVariacaoRapida.tam} onChange={e => setFormVariacaoRapida({...formVariacaoRapida, tam: e.target.value})} />
+                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase">Saco / Local (Opcional)</label>
+                <input type="text" className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold uppercase mt-1 focus:border-green-500 outline-none" placeholder="Ex: SACO 4" value={formVariacaoRapida.saco} onChange={e => setFormVariacaoRapida({...formVariacaoRapida, saco: e.target.value})} />
+              </div>
+
+              <button onClick={salvarVariacaoRapida} className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl mt-2 active:scale-95 transition-colors uppercase tracking-widest shadow-md">
+                Salvar Variação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* ========================================================= */}
+      {/* MODAL WIZARD (CRIAR / EDITAR VARIAÇÃO EXISTENTE) */}
       {/* ========================================================= */}
       {modalPassosAberto && (
          <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4" onClick={() => setModalPassosAberto(false)}>
@@ -297,7 +412,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
            
            <div className="bg-gray-50 p-4 border-b flex justify-between items-center">
              <div>
-               <h3 className="font-black text-gray-800">{editandoId ? 'Editando Produto' : 'Novo Produto'}</h3>
+               <h3 className="font-black text-gray-800">{editandoId ? 'Editando Variação' : 'Novo Produto'}</h3>
                <p className="text-xs font-bold text-blue-600">Passo {passoAtual} de 3</p>
              </div>
              <button onClick={() => setModalPassosAberto(false)} className="bg-gray-200 text-gray-600 w-8 h-8 rounded-full font-bold">X</button>
@@ -307,7 +422,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
              <div className={`h-full bg-blue-600 transition-all duration-300 ${passoAtual === 1 ? 'w-1/3' : passoAtual === 2 ? 'w-2/3' : 'w-full'}`}></div>
            </div>
 
-           <div className="p-5 flex-1 overflow-y-auto">
+           <div className="p-5 flex-1 overflow-y-auto custom-scrollbar">
              
              {passoAtual === 1 && (
                <div className="space-y-4 animate-fade-in">
@@ -317,23 +432,23 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                  </div>
                  <div>
                    <label className="text-xs font-bold text-gray-500 uppercase">Nome do Modelo</label>
-                   <input type="text" className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold uppercase mt-1 focus:border-blue-500 outline-none" placeholder="Ex: CONJUNTO COTELE" value={formBase.nome} onChange={e => setFormBase({...formBase, nome: e.target.value})} />
+                   <input disabled={editandoId !== null} type="text" className={`w-full p-3 border-2 border-gray-200 rounded-xl font-bold uppercase mt-1 focus:border-blue-500 outline-none ${editandoId ? 'bg-gray-100 text-gray-500' : ''}`} placeholder="Ex: CONJUNTO COTELE" value={formBase.nome} onChange={e => setFormBase({...formBase, nome: e.target.value})} />
                  </div>
                  <div className="grid grid-cols-2 gap-3">
                    <div>
                      <label className="text-xs font-bold text-gray-500 uppercase">Preço Varejo</label>
-                     <input type="number" className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold mt-1 focus:border-blue-500 outline-none" placeholder="R$" value={formBase.preco} onChange={e => setFormBase({...formBase, preco: e.target.value})} />
+                     <input disabled={editandoId !== null} type="number" className={`w-full p-3 border-2 border-gray-200 rounded-xl font-bold mt-1 focus:border-blue-500 outline-none ${editandoId ? 'bg-gray-100 text-gray-500' : ''}`} placeholder="R$" value={formBase.preco} onChange={e => setFormBase({...formBase, preco: e.target.value})} />
                    </div>
                    <div>
                      <label className="text-xs font-bold text-gray-500 uppercase">Preço Atacado</label>
-                     <input type="number" className="w-full p-3 border-2 border-gray-200 rounded-xl font-bold mt-1 focus:border-blue-500 outline-none" placeholder="R$" value={formBase.preco_atacado} onChange={e => setFormBase({...formBase, preco_atacado: e.target.value})} />
+                     <input disabled={editandoId !== null} type="number" className={`w-full p-3 border-2 border-gray-200 rounded-xl font-bold mt-1 focus:border-blue-500 outline-none ${editandoId ? 'bg-gray-100 text-gray-500' : ''}`} placeholder="R$" value={formBase.preco_atacado} onChange={e => setFormBase({...formBase, preco_atacado: e.target.value})} />
                    </div>
                  </div>
 
-                 {/* CAMPO DE CUSTO (NOVO) */}
-                 <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200 mt-2">
-                   <label className="text-xs font-bold text-yellow-700 uppercase block mb-1">Custo de Produção (Opcional)</label>
-                   <input type="number" className="w-full p-2 bg-transparent border-b-2 border-yellow-300 text-yellow-900 outline-none font-bold placeholder-yellow-400" placeholder="R$ 0.00" value={formBase.custo} onChange={e => setFormBase({...formBase, custo: e.target.value})} />
+                 {/* CAMPO DE CUSTO */}
+                 <div className={`p-3 rounded-xl border mt-2 ${editandoId ? 'bg-gray-100 border-gray-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                   <label className={`text-xs font-bold uppercase block mb-1 ${editandoId ? 'text-gray-400' : 'text-yellow-700'}`}>Custo de Produção</label>
+                   <input disabled={editandoId !== null} type="number" className="w-full p-2 bg-transparent border-b-2 border-gray-300 outline-none font-bold" placeholder="R$ 0.00" value={formBase.custo} onChange={e => setFormBase({...formBase, custo: e.target.value})} />
                  </div>
 
                  <button 
@@ -352,16 +467,16 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                <div className="space-y-4 animate-fade-in">
                  <div className="text-center mb-4">
                    <span className="text-4xl">📏</span>
-                   <h4 className="font-black text-gray-700 mt-2">Quais tamanhos essa peça tem?</h4>
-                   <p className="text-xs text-gray-400 font-bold mt-1 uppercase">Selecione todos que compõem a grade</p>
+                   <h4 className="font-black text-gray-700 mt-2">{editandoId ? 'Tamanho da Variação' : 'Quais tamanhos essa peça tem?'}</h4>
                  </div>
                  
                  <div className="flex flex-wrap gap-2 justify-center">
                    {tamanhosComuns.map(tam => (
                      <button 
                        key={tam} 
+                       disabled={editandoId !== null}
                        onClick={() => toggleTamanho(tam)}
-                       className={`w-14 h-14 rounded-2xl font-black text-lg transition-all border-2 active:scale-95 ${tamanhosSelecionados.includes(tam) ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}
+                       className={`w-14 h-14 rounded-2xl font-black text-lg transition-all border-2 ${editandoId ? 'cursor-not-allowed opacity-80' : 'active:scale-95'} ${tamanhosSelecionados.includes(tam) ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}
                      >
                        {tam}
                      </button>
@@ -386,7 +501,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
              {passoAtual === 3 && (
                <div className="space-y-4 animate-fade-in">
                  <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl text-center mb-4">
-                   <p className="text-xs text-blue-500 font-bold uppercase">Cadastrando variações para:</p>
+                   <p className="text-xs text-blue-500 font-bold uppercase">{editandoId ? 'Editando:' : 'Cadastrando para:'}</p>
                    <p className="font-black text-blue-800 leading-tight uppercase">{formBase.nome}</p>
                    <p className="text-[10px] text-blue-600 font-bold mt-1 uppercase">Tamanhos: {tamanhosSelecionados.join(', ')}</p>
                  </div>
@@ -426,18 +541,18 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
 
                      <div className="mt-4">
                        <p className="text-xs font-bold text-gray-500 uppercase mb-2">Ajustar Estoque Atual:</p>
-                       <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                       <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                          {tamanhosSelecionados.map(tam => (
                            <div key={tam} className="flex justify-between items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
                              <div className="w-12 font-black text-blue-600 text-xl text-center">{tam}</div>
                              <div className="flex gap-2">
                                <div className="flex flex-col items-center">
                                  <label className="text-[9px] font-bold text-gray-400 uppercase">Banca</label>
-                                 <input type="number" className="w-16 p-2 border border-gray-300 rounded-lg text-center font-bold" placeholder="0" value={estoques[tam]?.banca || ''} onChange={(e) => handleEstoque(tam, 'banca', e.target.value)} />
+                                 <input type="number" className="w-16 p-2 border border-gray-300 rounded-lg text-center font-bold outline-none focus:border-blue-500" placeholder="0" value={estoques[tam]?.banca || ''} onChange={(e) => handleEstoque(tam, 'banca', e.target.value)} />
                                </div>
                                <div className="flex flex-col items-center">
                                  <label className="text-[9px] font-bold text-gray-400 uppercase">Saco</label>
-                                 <input type="number" className="w-16 p-2 border border-gray-300 rounded-lg text-center font-bold" placeholder="0" value={estoques[tam]?.saco || ''} onChange={(e) => handleEstoque(tam, 'saco', e.target.value)} />
+                                 <input type="number" className="w-16 p-2 border border-gray-300 rounded-lg text-center font-bold outline-none focus:border-blue-500" placeholder="0" value={estoques[tam]?.saco || ''} onChange={(e) => handleEstoque(tam, 'saco', e.target.value)} />
                                </div>
                              </div>
                            </div>
@@ -448,13 +563,13 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                  )}
 
                  <div>
-                   <label className="text-xs font-bold text-gray-500 uppercase mt-2">Saco (Opcional - Aplica a tudo)</label>
+                   <label className="text-xs font-bold text-gray-500 uppercase mt-2">Saco / Local</label>
                    <input type="text" className="w-full p-2 border-2 border-gray-200 rounded-xl font-bold uppercase mt-1 focus:border-blue-500 outline-none" placeholder="Ex: SACO 4" value={formCor.saco} onChange={e => setFormCor({...formCor, saco: e.target.value})} />
                  </div>
 
                  <div className="flex gap-2 mt-4 border-t pt-4">
                    {!editandoId && <button onClick={() => setPassoAtual(2)} className="w-1/4 bg-gray-200 text-gray-600 font-black py-4 rounded-xl active:scale-95 text-xs">⬅ VOLTAR</button>}
-                   <button onClick={() => salvarVariacao(true)} className="flex-1 bg-green-500 text-white font-black py-4 rounded-xl active:scale-95 text-sm uppercase">💾 Salvar Tudo e Fechar</button>
+                   <button onClick={() => salvarVariacao(true)} className="flex-1 bg-green-500 hover:bg-green-600 text-white font-black py-4 rounded-xl active:scale-95 text-sm uppercase shadow-md transition-colors">💾 Salvar Tudo e Fechar</button>
                  </div>
                  
                  {!editandoId && (
@@ -479,7 +594,7 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
           <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <h3 className="font-black text-gray-800 flex items-center gap-2">✏️ Editar Modelo Base</h3>
-              <button onClick={() => setModalEdicaoMassaAberto(false)} className="bg-gray-200 text-gray-600 w-8 h-8 rounded-full font-bold">X</button>
+              <button onClick={() => setModalEdicaoMassaAberto(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full font-bold transition-colors">X</button>
             </div>
 
             <div className="space-y-4">
@@ -513,7 +628,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                 </div>
               </div>
 
-              {/* CAMPO DE CUSTO NA EDIÇÃO EM MASSA (NOVO) */}
               <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200">
                 <label className="text-xs font-bold text-yellow-700 uppercase block mb-1">Custo de Produção</label>
                 <input 
@@ -525,15 +639,15 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                 />
               </div>
 
-              <div className="bg-blue-50 p-3 rounded-lg text-xs font-bold text-blue-800 mt-2 text-center">
-                Isso vai alterar os valores de <br/>TODAS as cores e tamanhos!
+              <div className="bg-blue-50 p-3 rounded-lg text-[10px] font-bold text-blue-800 mt-2 text-center uppercase tracking-widest border border-blue-100">
+                Isso altera todas as cores e tamanhos
               </div>
 
               <button 
                 onClick={salvarEdicaoMassa} 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl mt-2 active:scale-95 transition-colors"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl mt-2 active:scale-95 transition-colors uppercase tracking-widest shadow-md"
               >
-                SALVAR ALTERAÇÕES
+                Salvar Alterações
               </button>
             </div>
           </div>

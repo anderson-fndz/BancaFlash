@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import toast from 'react-hot-toast';
 
 export default function ModalResumoDia({ aberto, fechar, produtos }) {
   const [vendasHoje, setVendasHoje] = useState([]);
   const [abaAtiva, setAbaAtiva] = useState('resumo');
+
+  // ✨ ESTADOS PARA A EDIÇÃO DE VENDAS
+  const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
+  const [vendaEditando, setVendaEditando] = useState(null);
 
   useEffect(() => {
     if (aberto) buscarVendasDoDia();
@@ -23,7 +28,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
   const faturamentoTotal = faturamentoDinheiro + faturamentoPix;
   const pecasVendidas = vendasHoje.reduce((acc, v) => acc + v.quantidade, 0);
 
-  // 🧠 RÉGUA DE TAMANHOS E ORDENAÇÃO
   const ordemTamanhos = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', 'G4', 'U'];
   
   const sortLogico = (a, b) => {
@@ -38,7 +42,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
   const reposicaoNecessaria = produtos.map(p => {
     const repor = p.meta_banca - (p.estoque_banca || 0);
     return { ...p, repor: repor > 0 ? repor : 0 };
-  }).filter(p => p.repor > 0).sort(sortLogico); // <- ORDENAÇÃO APLICADA AQUI
+  }).filter(p => p.repor > 0).sort(sortLogico);
 
   const reposicaoAgrupada = reposicaoNecessaria.reduce((acc, p) => {
     if (!acc[p.nome]) acc[p.nome] = [];
@@ -58,13 +62,70 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     Object.entries(reposicaoAgrupada).forEach(([nome, itens]) => {
       texto += `*${nome}*\n`;
       itens.forEach(p => {
-        // Visual Invertido pro WhatsApp também!
         texto += `▫️ Tam: ${p.tam} | ${p.cor} ➔ Puxar: ${p.repor}\n`;
       });
       texto += "\n";
     });
     navigator.clipboard.writeText(texto);
-    alert("Lista copiada para o WhatsApp!");
+    toast.success("Lista copiada para o WhatsApp!");
+  };
+
+  // ✨ FUNÇÕES DE EDIÇÃO DE VENDAS
+  const abrirEdicaoVenda = (transacao) => {
+    const dataTransacao = new Date(transacao.hora);
+    const horas = String(dataTransacao.getHours()).padStart(2, '0');
+    const minutos = String(dataTransacao.getMinutes()).padStart(2, '0');
+
+    setVendaEditando({
+      transacao_id: transacao.id,
+      hora: `${horas}:${minutos}`,
+      data_original: transacao.hora,
+      forma_pagamento: transacao.forma_pagamento,
+      itens: JSON.parse(JSON.stringify(transacao.itens)) // Copia profunda pra não alterar a tela antes de salvar
+    });
+    setModalEdicaoAberto(true);
+  };
+
+  const atualizarItemVenda = (index, campo, valor) => {
+    const novosItens = [...vendaEditando.itens];
+    novosItens[index][campo] = valor.toUpperCase();
+    setVendaEditando({ ...vendaEditando, itens: novosItens });
+  };
+
+  const salvarEdicaoVenda = async () => {
+    const loadingId = toast.loading('Atualizando venda...');
+
+    try {
+      const novaData = new Date(vendaEditando.data_original);
+      const [horas, minutos] = vendaEditando.hora.split(':');
+      novaData.setHours(horas, minutos);
+
+      // 1. Atualiza a Transação Inteira (Horário e Pagamento)
+      await supabase.from('vendas')
+        .update({ 
+          created_at: novaData.toISOString(),
+          forma_pagamento: vendaEditando.forma_pagamento 
+        })
+        .eq('transacao_id', vendaEditando.transacao_id);
+
+      // 2. Atualiza as cores e tamanhos de cada item dessa venda
+      for (const item of vendaEditando.itens) {
+        await supabase.from('vendas')
+          .update({
+            produto_cor: item.produto_cor.trim().toUpperCase(),
+            produto_tam: item.produto_tam.trim().toUpperCase()
+          })
+          .eq('id', item.id);
+      }
+
+      await buscarVendasDoDia();
+      setModalEdicaoAberto(false);
+      toast.success('Venda corrigida com sucesso!', { id: loadingId });
+
+    } catch (error) {
+      toast.error('Erro ao editar venda.', { id: loadingId });
+      console.error(error);
+    }
   };
 
   return (
@@ -83,6 +144,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
 
         <div className="flex-1 overflow-y-auto p-5 custom-scrollbar pb-8">
           
+          {/* ABA RESUMO */}
           {abaAtiva === 'resumo' && (
             <div className="space-y-6 animate-fade-in">
               <div className="grid grid-cols-2 gap-3">
@@ -118,7 +180,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                           {itens.map(p => (
                             <div key={p.id} className="p-3 flex justify-between items-center hover:bg-gray-50 transition-colors">
                               <div>
-                                {/* 🔄 VISUAL INVERTIDO (Tamanho ➔ Cor) */}
                                 <p className="font-bold text-gray-800 text-sm">Tam: <span className="text-blue-600 font-black">{p.tam}</span> <span className="text-gray-300 font-normal mx-1">|</span> {p.cor}</p>
                               </div>
                               <div className="text-right">
@@ -136,27 +197,38 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
             </div>
           )}
 
+          {/* ABA HISTÓRICO */}
           {abaAtiva === 'historico' && (
             <div className="space-y-4 animate-fade-in">
               {Object.values(transacoes).length === 0 ? (
                 <div className="text-center text-gray-400 font-bold p-10">Nenhuma venda registrada hoje.</div>
               ) : (
                 Object.values(transacoes).sort((a,b) => new Date(b.hora) - new Date(a.hora)).map((t, index) => (
-                  <div key={t.id} className="bg-white border-2 border-gray-100 rounded-2xl p-4 shadow-sm hover:border-gray-200 transition-colors">
-                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
+                  <div key={t.id} className="bg-white border-2 border-gray-100 rounded-2xl p-4 shadow-sm hover:border-blue-200 transition-colors group relative">
+                    
+                    {/* BOTÃO DE EDITAR (Aparece em destaque) */}
+                    <button 
+                      onClick={() => abrirEdicaoVenda(t)}
+                      className="absolute -top-3 -right-3 bg-blue-100 hover:bg-blue-600 text-blue-600 hover:text-white border-2 border-white shadow-md p-2 rounded-xl transition-all font-black text-xs active:scale-95"
+                    >
+                      ✏️ EDITAR
+                    </button>
+
+                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100 pr-8">
                       <span className="font-black text-gray-800">Venda #{Object.values(transacoes).length - index}</span>
-                      <span className="text-xs font-bold text-gray-400">{new Date(t.hora).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-md">{new Date(t.hora).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
+                    
                     <div className="space-y-1.5 mb-4">
                       {t.itens.map(item => (
-                        <div key={item.id} className="flex justify-between text-xs md:text-sm">
-                          {/* Histórico também padronizado Tam | Cor */}
+                        <div key={item.id} className="flex justify-between text-xs md:text-sm border-l-2 border-transparent hover:border-blue-300 pl-2 transition-all">
                           <span className="text-gray-600"><span className="font-bold text-gray-900">{item.quantidade}x</span> {item.produto_nome} (Tam: {item.produto_tam} | {item.produto_cor})</span>
                           <span className="font-bold text-gray-800">R$ {(item.quantidade * item.preco_unitario).toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
-                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
+                    
+                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
                       <span className={`text-[10px] font-black uppercase px-2 py-1 rounded tracking-wider ${t.forma_pagamento === 'PIX' ? 'bg-teal-100 text-teal-700' : 'bg-green-100 text-green-700'}`}>
                         PAGO EM: {t.forma_pagamento}
                       </span>
@@ -170,6 +242,89 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
 
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* ✏️ MODAL DE EDIÇÃO DE VENDA (RETROATIVA) */}
+      {/* ========================================================= */}
+      {modalEdicaoAberto && vendaEditando && (
+        <div className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4" onClick={() => setModalEdicaoAberto(false)}>
+          <div className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl p-5 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b pb-3 mb-4">
+              <h3 className="font-black text-gray-800 flex items-center gap-2">✏️ Corrigir Venda</h3>
+              <button onClick={() => setModalEdicaoAberto(false)} className="bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full font-bold transition-colors">X</button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Ajuste de Tempo e Pagamento */}
+              <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase">Horário</label>
+                  <input 
+                    type="time" 
+                    className="w-full p-2 border border-gray-300 rounded-lg font-bold mt-1 focus:border-blue-500 outline-none text-center" 
+                    value={vendaEditando.hora} 
+                    onChange={e => setVendaEditando({...vendaEditando, hora: e.target.value})} 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase">Pagamento</label>
+                  <select 
+                    className="w-full p-2 border border-gray-300 rounded-lg font-bold mt-1 focus:border-blue-500 outline-none text-center bg-white"
+                    value={vendaEditando.forma_pagamento}
+                    onChange={e => setVendaEditando({...vendaEditando, forma_pagamento: e.target.value})}
+                  >
+                    <option value="DINHEIRO">Dinheiro</option>
+                    <option value="PIX">PIX</option>
+                    <option value="CARTÃO">Cartão</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Ajuste de Cor e Tamanho dos Itens */}
+              <div>
+                <p className="text-xs font-black text-gray-800 uppercase mb-2 border-b pb-1">Peças da Venda:</p>
+                <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+                  {vendaEditando.itens.map((item, index) => (
+                    <div key={item.id} className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                      <p className="text-[11px] font-black text-blue-900 uppercase mb-2 leading-tight">
+                        {item.quantidade}x {item.produto_nome}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[9px] font-bold text-blue-600 uppercase">Cor Real</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-1 focus:border-blue-500 outline-none" 
+                            value={item.produto_cor} 
+                            onChange={e => atualizarItemVenda(index, 'produto_cor', e.target.value)} 
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-blue-600 uppercase">Tamanho Real</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs uppercase mt-1 focus:border-blue-500 outline-none text-center" 
+                            value={item.produto_tam} 
+                            onChange={e => atualizarItemVenda(index, 'produto_tam', e.target.value)} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button 
+                onClick={salvarEdicaoVenda} 
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl mt-2 active:scale-95 transition-colors uppercase tracking-widest shadow-md"
+              >
+                Salvar Correções
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
