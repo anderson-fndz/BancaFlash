@@ -89,8 +89,43 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
 
   const atualizarItemVenda = (index, campo, valor) => {
     const novosItens = [...vendaEditando.itens];
-    novosItens[index][campo] = valor.toUpperCase();
+    
+    if (campo === 'preco_unitario') {
+      const precoNumerico = parseFloat(valor) || 0;
+      novosItens[index][campo] = precoNumerico;
+      novosItens[index].total_item = novosItens[index].quantidade * precoNumerico;
+    } else {
+      novosItens[index][campo] = valor.toUpperCase();
+    }
+    
     setVendaEditando({ ...vendaEditando, itens: novosItens });
+  };
+
+  // ✨ 1. RECALCULAR A VENDA INTEIRA (Puxa do Banco)
+  const recalcularPrecosEditando = (tipo) => {
+    const novosItens = vendaEditando.itens.map(item => {
+       const prodOriginal = produtos.find(p => p.nome === item.produto_nome) || {};
+       const precoBase = prodOriginal.preco || item.preco_unitario; 
+       const precoAtacado = prodOriginal.preco_atacado || precoBase;
+       
+       const novoPreco = tipo === 'ATACADO' ? precoAtacado : precoBase;
+       return { ...item, preco_unitario: novoPreco, total_item: novoPreco * item.quantidade };
+    });
+    setVendaEditando({ ...vendaEditando, itens: novosItens });
+    toast.success(`Tudo recalculado para ${tipo}!`);
+  };
+
+  // ✨ 2. APLICAR PREÇO A TODOS DO MESMO MODELO
+  const aplicarPrecoATodos = (nomeProduto, preco) => {
+    const novosItens = vendaEditando.itens.map(item => {
+      if (item.produto_nome === nomeProduto) {
+        const precoNum = parseFloat(preco) || 0;
+        return { ...item, preco_unitario: precoNum, total_item: precoNum * item.quantidade };
+      }
+      return item;
+    });
+    setVendaEditando({ ...vendaEditando, itens: novosItens });
+    toast.success(`R$ ${parseFloat(preco).toFixed(2)} aplicado em todos os ${nomeProduto}!`);
   };
 
   const alterarQtdItem = (index, delta) => {
@@ -154,8 +189,8 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
             produto_cor: item.produto_cor.trim().toUpperCase() || 'PENDENTE',
             produto_tam: item.produto_tam.trim().toUpperCase(),
             quantidade: item.quantidade,
-            preco_unitario: item.preco_unitario,
-            total_item: item.quantidade * item.preco_unitario,
+            preco_unitario: parseFloat(item.preco_unitario) || 0,
+            total_item: item.quantidade * (parseFloat(item.preco_unitario) || 0),
             forma_pagamento: vendaEditando.forma_pagamento,
             created_at: novaData.toISOString()
           };
@@ -167,7 +202,8 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
               produto_cor: item.produto_cor.trim().toUpperCase(),
               produto_tam: item.produto_tam.trim().toUpperCase(),
               quantidade: item.quantidade,
-              total_item: item.quantidade * item.preco_unitario
+              preco_unitario: parseFloat(item.preco_unitario) || 0,
+              total_item: item.quantidade * (parseFloat(item.preco_unitario) || 0)
             })
             .eq('id', item.id);
         }
@@ -190,7 +226,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     }
   };
 
-  // 🧠 LISTA DE NOMES GERAIS PARA O AUTOCOMPLETE
   const nomesProdutosCadastrados = [...new Set(produtos.map(p => p.nome))].sort();
 
   return (
@@ -340,10 +375,18 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
               </div>
 
               <div>
-                <p className="text-xs font-black text-gray-800 uppercase mb-2 border-b pb-1">Itens da Venda:</p>
+                {/* ✨ BOTÕES GLOBAIS DE VAREJO E ATACADO */}
+                <div className="flex justify-between items-center mb-2 border-b pb-2">
+                  <p className="text-xs font-black text-gray-800 uppercase">Itens da Venda:</p>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase">Recalcular:</span>
+                    <button onClick={() => recalcularPrecosEditando('VAREJO')} className="text-[9px] bg-blue-100 text-blue-800 px-2 py-1 rounded shadow-sm font-black active:scale-95">VAREJO</button>
+                    <button onClick={() => recalcularPrecosEditando('ATACADO')} className="text-[9px] bg-amber-100 text-amber-800 px-2 py-1 rounded shadow-sm font-black active:scale-95">ATACADO</button>
+                  </div>
+                </div>
+
                 <div className="space-y-4">
                   {vendaEditando.itens.map((item, index) => {
-                    // 🧠 EXTRAINDO AS CORES E TAMANHOS SÓ DESTE PRODUTO PARA O AUTOCOMPLETE
                     const variacoesDesteProduto = produtos.filter(p => p.nome === item.produto_nome);
                     const coresDoProduto = [...new Set(variacoesDesteProduto.map(p => p.cor))].sort();
                     const tamanhosDoProduto = [...new Set(variacoesDesteProduto.map(p => p.tam))];
@@ -362,7 +405,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                           </button>
                         </div>
 
-                        {/* LISTA DE NOME DE PRODUTO DINÂMICA */}
                         <div className="mb-2">
                           <label className="text-[9px] font-bold text-blue-600 uppercase">Produto</label>
                           <input 
@@ -377,8 +419,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                           </datalist>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                          {/* LISTA DE CORES DINÂMICA (Puxa só as cores cadastradas para o produto acima) */}
+                        <div className="grid grid-cols-2 gap-2 mb-2">
                           <div>
                             <label className="text-[9px] font-bold text-blue-600 uppercase">Cor</label>
                             <input 
@@ -394,7 +435,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                             </datalist>
                           </div>
                           
-                          {/* LISTA DE TAMANHOS DINÂMICA */}
                           <div>
                             <label className="text-[9px] font-bold text-blue-600 uppercase">Tamanho</label>
                             <input 
@@ -409,6 +449,36 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                             </datalist>
                           </div>
                         </div>
+
+                        {/* ✨ PREÇO UNITÁRIO COM BOTÃO "APLICAR A TODOS" */}
+                        <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-blue-100">
+                          <div>
+                            <label className="text-[9px] font-bold text-blue-600 uppercase">Preço Unit. (R$)</label>
+                            <div className="flex gap-1 mt-0.5">
+                              <input 
+                                type="number" 
+                                className="w-full p-2 border border-blue-200 rounded-lg font-black text-xs focus:border-blue-500 outline-none bg-white text-center" 
+                                value={item.preco_unitario} 
+                                onChange={e => atualizarItemVenda(index, 'preco_unitario', e.target.value)} 
+                              />
+                              <button 
+                                onClick={() => aplicarPrecoATodos(item.produto_nome, item.preco_unitario)}
+                                className="bg-blue-600 text-white w-8 rounded-lg flex items-center justify-center active:scale-95 shadow-sm"
+                                title="Aplicar este preço a todos os itens iguais"
+                              >
+                                🔄
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold text-blue-600 uppercase">Subtotal</label>
+                            <div className="w-full p-2 rounded-lg font-black text-xs mt-0.5 bg-blue-100 text-blue-900 flex items-center justify-between border border-transparent">
+                              <span>R$</span>
+                              <span>{parseFloat(item.total_item || 0).toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+
                       </div>
                     );
                   })}
