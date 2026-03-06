@@ -12,9 +12,11 @@ export default function Sidebar({
   setMenuMobileAberto 
 }) {
   
+  // ✨ SUBIMOS O FINANCEIRO PRO MENU PRINCIPAL!
   const menuPrincipal = [
     { id: 'PDV', nome: 'Ponto de Venda', icone: '🛒' },
-    { id: 'BI', nome: 'Dashboard (BI)', icone: '📈' }
+    { id: 'BI', nome: 'Dashboard (BI)', icone: '📈' },
+    { id: 'FINANCEIRO', nome: 'Financeiro', icone: '💸' }
   ];
 
   return (
@@ -57,7 +59,9 @@ export default function Sidebar({
                   key={item.id}
                   onClick={() => { setTelaAtiva(item.id); setMenuMobileAberto(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all active:scale-95
-                    ${telaAtiva === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}
+                    ${telaAtiva === item.id 
+                      ? (item.id === 'FINANCEIRO' ? 'bg-red-600 text-white shadow-lg shadow-red-900/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-900/20') 
+                      : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}
                   `}
                 >
                   <span className="text-lg">{item.icone}</span>
@@ -106,6 +110,7 @@ export default function Sidebar({
               >
                 <span className="text-lg drop-shadow-md">⚡</span> Bater Estoque
               </button>
+              {/* Apagamos o botão vermelho daqui! Ele subiu pro menu principal */}
             </div>
           </div>
 

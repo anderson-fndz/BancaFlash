@@ -12,8 +12,10 @@ import GerenciarEstoque from './components/GerenciarEstoque';
 import ModalResumoDia from './components/ModalResumoDia';
 import LocalizadorEstoque from './components/LocalizadorEstoque';
 import ModalReposicao from './components/ModalReposicao';
-import ModalConciliacao from './components/ModalConciliacao'; // ✨ IMPORTADO AQUI!
+import ModalConciliacao from './components/ModalConciliacao'; 
 import DashboardBI from './components/DashboardBI';
+// ✨ IMPORTANDO A NOVA TELA DE FINANCEIRO
+import TelaFinanceiro from './components/TelaFinanceiro';
 
 export default function App() {
   const [sessao, setSessao] = useState(null);
@@ -32,7 +34,8 @@ export default function App() {
   const [modalResumoAberto, setModalResumoAberto] = useState(false);
   const [modalLocalizadorAberto, setModalLocalizadorAberto] = useState(false);
   const [modalReposicaoAberto, setModalReposicaoAberto] = useState(false);
-  const [modalConciliacaoAberto, setModalConciliacaoAberto] = useState(false); // ✨ ESTADO AQUI!
+  const [modalConciliacaoAberto, setModalConciliacaoAberto] = useState(false); 
+  
   const [menuMobileAberto, setMenuMobileAberto] = useState(false);
 
   useEffect(() => {
@@ -196,11 +199,14 @@ export default function App() {
         <Header setMenuMobileAberto={setMenuMobileAberto} />        
         
         <main className="flex-1 overflow-y-auto relative">
+          {/* ✨ RENDERIZAÇÃO DAS TELAS PRINCIPAIS AQUI ✨ */}
           {telaAtiva === 'PDV' ? (
             <Vitrine produtos={produtos} setProdutoAberto={setProdutoAberto} />
-          ) : (
+          ) : telaAtiva === 'BI' ? (
             <DashboardBI />
-          )}
+          ) : telaAtiva === 'FINANCEIRO' ? (
+            <TelaFinanceiro />
+          ) : null}
         </main>
 
         {telaAtiva === 'PDV' && (
@@ -231,7 +237,6 @@ export default function App() {
         produtos={produtos} buscarProdutos={buscarProdutos}
       />
 
-      {/* ✨ RENDERIZADO AQUI! */}
       <ModalConciliacao 
         aberto={modalConciliacaoAberto} fechar={() => setModalConciliacaoAberto(false)}
         produtos={produtos} buscarProdutos={buscarProdutos}
