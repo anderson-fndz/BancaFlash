@@ -1,264 +1,271 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import toast from 'react-hot-toast';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default function TelaFinanceiro() {
-  const [despesasHoje, setDespesasHoje] = useState([]);
   const [carregando, setCarregando] = useState(false);
-
-  // Estados do Formulário
+  const [analisandoIA, setAnalisandoIA] = useState(false);
+  const [despesas, setDespesas] = useState([]);
+  
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('DINHEIRO');
-  
-  // ✨ NOVO: Controle de Edição
+  const [categoria, setCategoria] = useState('OUTROS');
   const [editandoId, setEditandoId] = useState(null);
 
+  const categoriasDisponiveis = ['OUTROS', 'MERCADORIA', 'ALIMENTACAO', 'TRANSPORTE', 'FUNCIONARIOS', 'TAXAS/IMPOSTOS'];
+
   useEffect(() => {
-    buscarDespesas();
+    buscarDespesasHoje();
   }, []);
 
-  const buscarDespesas = async () => {
+  const buscarDespesasHoje = async () => {
+    setCarregando(true);
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
+
     const { data } = await supabase
       .from('despesas')
       .select('*')
       .gte('created_at', hoje.toISOString())
       .order('created_at', { ascending: false });
     
-    if (data) setDespesasHoje(data);
+    if (data) setDespesas(data);
+    setCarregando(false);
+  };
+
+  // ✨ IA SMART INPUT: Analisa o texto, extrai valor e categoriza ✨
+  const analisarTextoComIA = async () => {
+    if (!descricao.trim()) {
+      toast.error("Digite o que você gastou primeiro!");
+      return;
+    }
+
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      toast.error("Chave da IA (VITE_GEMINI_API_KEY) não encontrada no .env!");
+      return;
+    }
+
+    setAnalisandoIA(true);
+    const toastId = toast.loading("🪄 A IA está lendo...");
+
+    try {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const prompt = `
+        Você é um assistente financeiro de uma loja de roupas no Brás. 
+        O lojista digitou a seguinte anotação na pressa: "${descricao}"
+        Essa anotação pode estar em espanhol (portunhol), com erros de digitação ou gírias.
+        
+        Sua tarefa:
+        1. Extraia o nome do gasto de forma limpa, curta e em português (Ex: "kfe" -> "CAFE", "almuerzo" -> "ALMOCO").
+        2. Extraia o valor numérico (apenas os números). Se não tiver valor na frase, retorne 0.
+        3. Escolha APENAS UMA destas categorias que melhor se encaixa: OUTROS, MERCADORIA, ALIMENTACAO, TRANSPORTE, FUNCIONARIOS, TAXAS/IMPOSTOS.
+        
+        Retorne estritamente um JSON neste formato, sem formatação markdown, sem crases, apenas o JSON puro:
+        {"descricao": "string", "valor": 0.00, "categoria": "string"}
+      `;
+
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text();
+      
+      // Limpeza de segurança caso a IA retorne markdown (```json ... ```)
+      const jsonLimpo = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const dadosIA = JSON.parse(jsonLimpo);
+
+      // Aplica os dados mágicos na tela
+      if (dadosIA.descricao) setDescricao(dadosIA.descricao.toUpperCase());
+      if (dadosIA.valor > 0) setValor(dadosIA.valor);
+      if (dadosIA.categoria && categoriasDisponiveis.includes(dadosIA.categoria)) {
+        setCategoria(dadosIA.categoria);
+      }
+
+      toast.success("Mágica feita! Confira e salve.", { id: toastId });
+    } catch (error) {
+      console.error("Erro na IA:", error);
+      toast.error("A IA ficou confusa. Preencha manualmente.", { id: toastId });
+    }
+    setAnalisandoIA(false);
   };
 
   const abrirEdicao = (despesa) => {
     setDescricao(despesa.descricao);
     setValor(despesa.valor);
     setFormaPagamento(despesa.forma_pagamento);
+    setCategoria(despesa.categoria || 'OUTROS');
     setEditandoId(despesa.id);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Sobe a tela suavemente pro formulário
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelarEdicao = () => {
-    setDescricao('');
-    setValor('');
-    setFormaPagamento('DINHEIRO');
-    setEditandoId(null);
+    setDescricao(''); setValor(''); setFormaPagamento('DINHEIRO'); setCategoria('OUTROS'); setEditandoId(null);
   };
 
   const salvarDespesa = async () => {
     if (!descricao.trim() || !valor || parseFloat(valor) <= 0) {
-      toast.error("Preencha a descrição e um valor válido!");
-      return;
+      toast.error("Preencha a descrição e um valor válido!"); return;
     }
-
     setCarregando(true);
-    const loadingId = toast.loading(editandoId ? "Atualizando despesa..." : "Registrando saída...");
+    const loadingId = toast.loading(editandoId ? "Atualizando..." : "Registrando...");
 
     const dadosDespesa = {
-      descricao: descricao.trim().toUpperCase(),
-      valor: parseFloat(valor),
-      forma_pagamento: formaPagamento
+      descricao: descricao.trim().toUpperCase(), 
+      valor: parseFloat(valor), 
+      forma_pagamento: formaPagamento, 
+      categoria: categoria
     };
 
     if (editandoId) {
-      // MODO EDIÇÃO
       const { error } = await supabase.from('despesas').update(dadosDespesa).eq('id', editandoId);
-      if (error) {
-        toast.error("Erro ao atualizar.", { id: loadingId });
-        console.error(error);
-      } else {
-        toast.success("Despesa atualizada!", { id: loadingId });
-        cancelarEdicao();
-        await buscarDespesas();
-      }
+      if (error) toast.error("Erro ao atualizar.", { id: loadingId });
+      else { toast.success("Despesa atualizada!", { id: loadingId }); cancelarEdicao(); buscarDespesasHoje(); }
     } else {
-      // MODO CRIAÇÃO
       const { error } = await supabase.from('despesas').insert([dadosDespesa]);
-      if (error) {
-        toast.error("Erro ao registrar despesa.", { id: loadingId });
-        console.error(error);
-      } else {
-        toast.success("Despesa registrada!", { id: loadingId });
-        cancelarEdicao();
-        await buscarDespesas();
-      }
+      if (error) toast.error("Erro ao registrar.", { id: loadingId });
+      else { toast.success("Despesa registrada!", { id: loadingId }); cancelarEdicao(); buscarDespesasHoje(); }
     }
     setCarregando(false);
   };
 
   const excluirDespesa = async (id) => {
-    if (window.confirm("Certeza que deseja apagar este registro de saída?")) {
-      const loadingId = toast.loading("Apagando...");
-      await supabase.from('despesas').delete().eq('id', id);
-      await buscarDespesas();
-      toast.success("Registro apagado!", { id: loadingId });
-    }
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="font-bold text-gray-800 text-sm">Deseja excluir este gasto?</p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors">Cancelar</button>
+          <button onClick={async () => {
+            toast.dismiss(t.id);
+            const loadingId = toast.loading("Apagando...");
+            const { error } = await supabase.from('despesas').delete().eq('id', id);
+            if (!error) {
+              toast.success("Gasto apagado!", { id: loadingId });
+              buscarDespesasHoje();
+            } else {
+              toast.error("Erro ao apagar.", { id: loadingId });
+            }
+          }} className="px-3 py-1.5 bg-red-600 text-white hover:bg-red-700 rounded-lg text-xs font-bold transition-colors shadow-sm">Sim, Excluir</button>
+        </div>
+      </div>
+    ), { duration: 5000, id: `confirm-despesa-${id}` });
   };
 
-  const totalDespesas = despesasHoje.reduce((acc, d) => acc + parseFloat(d.valor), 0);
-
   return (
-    <div className="p-4 md:p-8 animate-fade-in max-w-6xl mx-auto pb-32 md:pb-8">
+    <div className="p-3 md:p-8 animate-fade-in max-w-4xl mx-auto pb-32 md:pb-8">
       
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-black text-gray-800 tracking-tight flex items-center gap-3">
-          <span className="text-4xl">💸</span> Controle Financeiro
+      <div className="mb-6 md:mb-8">
+        <h1 className="text-xl md:text-3xl font-black text-gray-800 tracking-tight flex items-center gap-2 md:gap-3">
+          <span className="text-3xl md:text-4xl">💸</span> Lançar Saídas
         </h1>
-        <p className="text-gray-500 font-bold mt-1 uppercase text-xs tracking-widest">
-          Gestão de Saídas e Sangrias do Caixa
+        <p className="text-gray-500 font-bold mt-1 uppercase text-[10px] md:text-xs tracking-widest hidden md:block">
+          Registre os gastos com ajuda da Inteligência Artificial
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="space-y-6">
         
-        {/* LADO ESQUERDO: FORMULÁRIO */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* FORMULÁRIO OPERACIONAL */}
+        <div className={`p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-sm border-2 relative overflow-hidden transition-colors ${editandoId ? 'bg-orange-50 border-orange-200' : 'bg-white border-gray-200'}`}>
+          <div className={`absolute top-0 left-0 w-full h-1 ${editandoId ? 'bg-orange-500' : 'bg-red-500'}`}></div>
           
-          <div className={`p-6 rounded-3xl shadow-sm border-2 relative overflow-hidden transition-colors ${editandoId ? 'bg-orange-50 border-orange-200' : 'bg-white border-gray-200'}`}>
-            <div className={`absolute top-0 left-0 w-full h-1 ${editandoId ? 'bg-orange-500' : 'bg-red-500'}`}></div>
+          <div className="flex justify-between items-center mb-4 md:mb-5">
+            <h2 className={`font-black text-base md:text-lg uppercase flex items-center gap-2 ${editandoId ? 'text-orange-800' : 'text-gray-800'}`}>
+              {editandoId ? '✏️ Editando Saída' : '📝 Nova Despesa'}
+            </h2>
+            {editandoId && (
+              <button onClick={cancelarEdicao} className="text-[9px] md:text-[10px] font-black uppercase text-gray-500 bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded transition-colors">Cancelar</button>
+            )}
+          </div>
+
+          <div className="space-y-3 md:space-y-4">
             
-            <div className="flex justify-between items-center mb-5">
-              <h2 className={`font-black text-lg uppercase flex items-center gap-2 ${editandoId ? 'text-orange-800' : 'text-gray-800'}`}>
-                {editandoId ? '✏️ Editando Saída' : '📝 Registrar Nova Saída'}
-              </h2>
-              {editandoId && (
-                <button onClick={cancelarEdicao} className="text-[10px] font-black uppercase text-gray-500 bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded transition-colors">
-                  Cancelar Edição
+            {/* ✨ CAMPO DE DESCRIÇÃO COM BOTÃO DA IA ✨ */}
+            <div>
+              <div className="flex justify-between items-end mb-1">
+                <label className="text-[9px] md:text-[10px] font-bold uppercase text-gray-500">O que você gastou?</label>
+                <button 
+                  onClick={analisarTextoComIA}
+                  disabled={analisandoIA || !descricao}
+                  className={`text-[9px] md:text-[10px] font-black uppercase px-2 py-1 rounded-lg transition-all flex items-center gap-1 ${descricao ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 active:scale-95 cursor-pointer shadow-sm border border-purple-200' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-transparent'}`}
+                  title="A IA vai ler o texto, preencher o valor e escolher a categoria sozinha!"
+                >
+                  {analisandoIA ? '⏳ PENSANDO...' : '🪄 AUTO-PREENCHER (IA)'}
                 </button>
-              )}
+              </div>
+              <input 
+                type="text" 
+                placeholder="Ex: kfe 5 contos, comprei linha por 1500" 
+                className={`w-full p-3 md:p-4 border-2 rounded-xl font-black uppercase focus:outline-none transition-all text-xs md:text-sm ${analisandoIA ? 'border-purple-400 bg-purple-50 text-purple-900 animate-pulse' : 'border-gray-200 focus:border-red-400'}`} 
+                value={descricao} 
+                onChange={e => setDescricao(e.target.value)} 
+                onKeyDown={e => e.key === 'Enter' && analisarTextoComIA()}
+              />
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={`text-xs font-bold uppercase ${editandoId ? 'text-orange-700' : 'text-gray-500'}`}>Motivo / Descrição</label>
-                <input 
-                  type="text" 
-                  placeholder="Ex: CAFÉ, ROLOS DE TECIDO, MOTOBOY" 
-                  className="w-full p-4 border-2 border-gray-200 rounded-xl font-black uppercase mt-1 focus:border-red-400 outline-none text-gray-700 bg-white transition-colors"
-                  value={descricao} onChange={e => setDescricao(e.target.value)}
-                />
+                <label className="text-[9px] md:text-[10px] font-bold uppercase text-gray-500">Valor (R$)</label>
+                <input type="number" placeholder="0.00" className="w-full p-3 md:p-4 border-2 border-gray-200 rounded-xl font-black mt-1 text-red-600 focus:border-red-400 outline-none text-base md:text-lg bg-white" value={valor} onChange={e => setValor(e.target.value)} />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className={`text-xs font-bold uppercase ${editandoId ? 'text-orange-700' : 'text-gray-500'}`}>Valor (R$)</label>
-                  <input 
-                    type="number" 
-                    placeholder="0.00" 
-                    className="w-full p-4 border-2 border-gray-200 rounded-xl font-black mt-1 focus:border-red-400 outline-none text-red-600 text-lg bg-white transition-colors"
-                    value={valor} onChange={e => setValor(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className={`text-xs font-bold uppercase ${editandoId ? 'text-orange-700' : 'text-gray-500'}`}>Pagamento</label>
-                  <select 
-                    className="w-full p-4 border-2 border-gray-200 rounded-xl font-black mt-1 focus:border-red-400 outline-none bg-white transition-colors text-gray-700"
-                    value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}
-                  >
-                    <option value="DINHEIRO">Dinheiro</option>
-                    <option value="PIX">PIX</option>
-                  </select>
-                </div>
+              <div>
+                <label className="text-[9px] md:text-[10px] font-bold uppercase text-gray-500">Pagamento</label>
+                <select className="w-full p-3 md:p-4 border-2 border-gray-200 rounded-xl font-black mt-1 focus:border-red-400 outline-none bg-white text-xs md:text-sm text-gray-700" value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}>
+                  <option value="DINHEIRO">Dinheiro</option>
+                  <option value="PIX">PIX</option>
+                </select>
               </div>
-
-              <button 
-                onClick={salvarDespesa} disabled={carregando}
-                className={`w-full text-white font-black py-4 rounded-xl mt-4 active:scale-95 transition-colors uppercase tracking-widest shadow-lg flex justify-center items-center gap-2
-                  ${editandoId ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/30' : 'bg-red-600 hover:bg-red-700 shadow-red-500/30'}
-                `}
-              >
-                <span>{editandoId ? '🔄' : '➖'}</span> 
-                {editandoId ? 'ATUALIZAR DESPESA' : 'SALVAR DESPESA'}
-              </button>
-
-              {/* LINHA DIVISÓRIA E BOTÃO DE IA (DESABILITADO PARA A PRÓXIMA FASE) */}
-              {!editandoId && (
-                <>
-                  <div className="relative py-4 flex items-center">
-                    <div className="flex-grow border-t border-gray-200"></div>
-                    <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold uppercase">Ou facilite sua vida</span>
-                    <div className="flex-grow border-t border-gray-200"></div>
-                  </div>
-
-                  <button 
-                    disabled
-                    className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-black py-4 rounded-xl active:scale-95 transition-colors uppercase tracking-widest shadow-md flex justify-center items-center gap-2 opacity-60 cursor-not-allowed group relative"
-                  >
-                    <span className="text-xl">📸</span> 
-                    LER RECIBO COM IA
-                    <span className="absolute -top-3 -right-2 bg-yellow-400 text-yellow-900 text-[9px] px-2 py-1 rounded-full shadow-sm group-hover:scale-110 transition-transform">Em breve!</span>
-                  </button>
-                </>
-              )}
-
             </div>
+
+            <div>
+              <label className="text-[9px] md:text-[10px] font-bold uppercase text-gray-400 flex justify-between">
+                <span>Categoria <span className="font-normal opacity-70">(A IA preenche pra você)</span></span>
+              </label>
+              <select className="w-full p-3 md:p-4 border-2 border-gray-100 rounded-xl font-bold mt-1 focus:border-gray-300 outline-none bg-gray-50 text-gray-600 text-xs md:text-sm" value={categoria} onChange={e => setCategoria(e.target.value)}>
+                {categoriasDisponiveis.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+            </div>
+
+            <button onClick={salvarDespesa} disabled={carregando || analisandoIA} className={`w-full text-white font-black py-3 md:py-4 rounded-xl mt-2 active:scale-95 uppercase shadow-lg transition-all text-xs md:text-sm ${editandoId ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/30' : 'bg-red-600 hover:bg-red-700 shadow-red-500/30'}`}>
+              {editandoId ? 'ATUALIZAR DESPESA' : 'SALVAR DESPESA'}
+            </button>
           </div>
         </div>
 
-        {/* LADO DIREITO: HISTÓRICO E MÉTRICAS */}
-        <div className="lg:col-span-7 space-y-6">
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-center">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Gasto Hoje</p>
-              <p className="text-3xl font-black text-red-600">R$ {totalDespesas.toFixed(2)}</p>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-center">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Lançamentos</p>
-              <p className="text-3xl font-black text-gray-800">{despesasHoje.length} <span className="text-sm text-gray-400 font-bold">itens</span></p>
-            </div>
+        {/* HISTÓRICO RÁPIDO DO DIA */}
+        <div className="bg-white rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-gray-50 px-4 md:px-5 py-3 md:py-4 border-b border-gray-100 flex justify-between items-center">
+            <h3 className="font-black text-gray-800 text-xs md:text-sm uppercase">📋 Histórico de Hoje</h3>
+            <span className="text-[9px] md:text-[10px] font-bold text-gray-400 bg-white px-2 py-1 rounded border border-gray-200 shadow-sm">{despesas.length} itens</span>
           </div>
-
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="bg-gray-50 px-6 py-4 border-b border-gray-100">
-              <h3 className="font-black text-gray-800 text-sm uppercase">📋 Histórico de Hoje</h3>
-            </div>
-            
-            <div className="p-4 custom-scrollbar max-h-[500px] overflow-y-auto">
-              {despesasHoje.length === 0 ? (
-                <div className="text-center text-gray-400 font-bold py-12 flex flex-col items-center justify-center">
-                  <span className="text-4xl mb-3 opacity-50">✨</span>
-                  Nenhum gasto registrado hoje!
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {despesasHoje.map(d => (
-                    <div key={d.id} className={`border-2 rounded-2xl p-4 shadow-sm flex justify-between items-center group transition-colors ${editandoId === d.id ? 'bg-orange-50 border-orange-300' : 'bg-white border-gray-50 hover:border-red-100'}`}>
-                      <div>
-                        <p className="font-black text-gray-800 text-sm uppercase leading-tight">{d.descricao}</p>
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-wider ${d.forma_pagamento === 'PIX' ? 'bg-teal-50 text-teal-700' : 'bg-gray-100 text-gray-600'}`}>
-                            {d.forma_pagamento}
-                          </span>
-                          <span className="text-xs font-bold text-gray-400">{new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-red-600 text-lg mr-2">R$ {parseFloat(d.valor).toFixed(2)}</span>
-                        
-                        {/* BOTÕES DE AÇÃO */}
-                        <button 
-                          onClick={() => abrirEdicao(d)} 
-                          className="w-10 h-10 bg-blue-50 hover:bg-blue-600 text-blue-500 hover:text-white rounded-xl flex items-center justify-center active:scale-95 transition-colors"
-                          title="Editar Despesa"
-                        >
-                          ✏️
-                        </button>
-                        <button 
-                          onClick={() => excluirDespesa(d.id)} 
-                          className="w-10 h-10 bg-red-50 hover:bg-red-600 text-red-500 hover:text-white rounded-xl flex items-center justify-center active:scale-95 transition-colors"
-                          title="Apagar Despesa"
-                        >
-                          🗑️
-                        </button>
+          
+          <div className="p-3 md:p-5 custom-scrollbar max-h-[400px] overflow-y-auto">
+            {despesas.length === 0 ? (
+              <div className="text-center text-gray-400 font-bold py-10 opacity-70">Nenhum gasto anotado hoje. Tudo no azul! ✌️</div>
+            ) : (
+              <div className="space-y-2 md:space-y-3">
+                {despesas.map(d => (
+                  <div key={d.id} className={`border-2 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-sm flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 transition-colors group ${editandoId === d.id ? 'bg-orange-50 border-orange-300' : 'bg-white hover:border-red-100'}`}>
+                    <div>
+                      <p className="font-black text-gray-800 text-xs md:text-sm uppercase leading-tight">{d.descricao}</p>
+                      <div className="flex gap-2 mt-1.5 md:mt-2">
+                        {d.categoria !== 'OUTROS' && (
+                          <span className="text-[8px] md:text-[9px] font-black uppercase text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">{d.categoria}</span>
+                        )}
+                        <span className="text-[8px] md:text-[9px] font-black uppercase text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">{d.forma_pagamento}</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    <div className="flex items-center gap-2 justify-end mt-2 sm:mt-0 border-t sm:border-0 pt-2 sm:pt-0 border-gray-50">
+                      <span className="font-black text-red-600 text-base md:text-lg mr-2">R$ {parseFloat(d.valor).toFixed(2)}</span>
+                      <button onClick={() => abrirEdicao(d)} className="w-8 h-8 md:w-10 md:h-10 bg-blue-50 text-blue-500 hover:bg-blue-600 hover:text-white rounded-lg md:rounded-xl flex items-center justify-center transition-colors">✏️</button>
+                      <button onClick={() => excluirDespesa(d.id)} className="w-8 h-8 md:w-10 md:h-10 bg-red-50 text-red-500 hover:bg-red-600 hover:text-white rounded-lg md:rounded-xl flex items-center justify-center transition-colors">🗑️</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-
         </div>
 
       </div>

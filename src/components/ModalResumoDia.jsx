@@ -1,198 +1,360 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import toast from 'react-hot-toast';
-import ModalEdicaoVenda from './ModalEdicaoVenda'; // IMPORTANDO O NOVO ARQUIVO!
+import ModalEdicaoVenda from './ModalEdicaoVenda'; 
 
-export default function ModalResumoDia({ aberto, fechar, produtos }) {
+export default function ModalResumoDia({ aberto, fechar, produtos }) { 
   const [vendasHoje, setVendasHoje] = useState([]);
-  const [abaAtiva, setAbaAtiva] = useState('resumo');
-  const [vendaSelecionada, setVendaSelecionada] = useState(null); // Controle do novo modal
+  const [carregando, setCarregando] = useState(true);
+  const [abaAtiva, setAbaAtiva] = useState('GERAL'); 
+
+  const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
+  const [vendaSendoEditada, setVendaSendoEditada] = useState(null);
 
   useEffect(() => {
     if (aberto) {
-      buscarVendasDoDia();
-      setVendaSelecionada(null); // Reseta a edição se fechar e abrir de novo
+      buscarVendasDeHoje();
     }
   }, [aberto]);
 
-  if (!aberto) return null;
-
-  const buscarVendasDoDia = async () => {
+  const buscarVendasDeHoje = async () => {
+    setCarregando(true);
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    const { data } = await supabase.from('vendas').select('*').gte('created_at', hoje.toISOString()).order('created_at', { ascending: false });
-    if (data) setVendasHoje(data);
+
+    const { data, error } = await supabase
+      .from('vendas')
+      .select('*')
+      .gte('created_at', hoje.toISOString())
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setVendasHoje(data);
+    }
+    setCarregando(false);
   };
 
-  const faturamentoDinheiro = vendasHoje.filter(v => v.forma_pagamento === 'DINHEIRO').reduce((acc, v) => acc + parseFloat(v.total_item), 0);
-  const faturamentoPix = vendasHoje.filter(v => v.forma_pagamento === 'PIX').reduce((acc, v) => acc + parseFloat(v.total_item), 0);
-  const faturamentoTotal = faturamentoDinheiro + faturamentoPix;
-  const pecasVendidas = vendasHoje.reduce((acc, v) => acc + v.quantidade, 0);
+  // Cálculos de Resumo
+  const faturamentoHoje = vendasHoje.reduce((acc, venda) => acc + parseFloat(venda.total_item), 0);
+  const pecasVendidas = vendasHoje.reduce((acc, venda) => acc + parseInt(venda.quantidade), 0);
+  const totalPix = vendasHoje.filter(v => v.forma_pagamento === 'PIX').reduce((acc, v) => acc + parseFloat(v.total_item), 0);
+  const totalDinheiro = vendasHoje.filter(v => v.forma_pagamento === 'DINHEIRO').reduce((acc, v) => acc + parseFloat(v.total_item), 0);
 
-  const limparTamanho = (t) => String(t || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  const ordemTamanhos = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', 'G4', 'U'];
-  
-  const sortLogico = (a, b) => {
-    let idxA = ordemTamanhos.indexOf(limparTamanho(a.tam));
-    let idxB = ordemTamanhos.indexOf(limparTamanho(b.tam));
-    if (idxA === -1) idxA = 999;
-    if (idxB === -1) idxB = 999;
-    if (idxA !== idxB) return idxA - idxB;
-    return String(a.cor || '').trim().localeCompare(String(b.cor || '').trim());
-  };
-
-  const reposicaoNecessaria = produtos.map(p => {
-    const repor = p.meta_banca - (p.estoque_banca || 0);
-    return { ...p, repor: repor > 0 ? repor : 0 };
-  }).filter(p => p.repor > 0).sort(sortLogico);
-
-  const reposicaoAgrupada = reposicaoNecessaria.reduce((acc, p) => {
-    if (!acc[p.nome]) acc[p.nome] = [];
-    acc[p.nome].push(p);
+  const itensVendidosAgrupados = vendasHoje.reduce((acc, venda) => {
+    const nome = venda.produto_nome;
+    if (!acc[nome]) acc[nome] = 0;
+    acc[nome] += parseInt(venda.quantidade);
     return acc;
   }, {});
 
-  const transacoes = vendasHoje.reduce((acc, v) => {
-    if (!acc[v.transacao_id]) acc[v.transacao_id] = { id: v.transacao_id, hora: v.created_at, total: 0, forma_pagamento: v.forma_pagamento, itens: [] };
-    acc[v.transacao_id].total += parseFloat(v.total_item);
-    acc[v.transacao_id].itens.push(v);
+  const listaReposicao = vendasHoje.reduce((acc, venda) => {
+    if (venda.produto_nome.startsWith('GEN-')) return acc;
+    
+    const nome = venda.produto_nome;
+    const tam = venda.produto_tam || 'ÚNICO';
+    const cor = venda.produto_cor || 'PADRÃO';
+    
+    if (!acc[nome]) acc[nome] = {};
+    if (!acc[nome][tam]) acc[nome][tam] = {};
+    
+    acc[nome][tam][cor] = (acc[nome][tam][cor] || 0) + parseInt(venda.quantidade);
     return acc;
   }, {});
 
-  const copiarListaReposicao = () => {
-    let texto = "*📦 LISTA DE REPOSIÇÃO (BANCA)*\n\n";
-    Object.entries(reposicaoAgrupada).forEach(([nome, itens]) => {
-      texto += `*${nome}*\n`;
-      itens.forEach(p => {
-        texto += `▫️ Tam: ${p.tam} | ${p.cor} ➔ Puxar: ${p.repor}\n`;
+  // ✨ A ORDEM DE TAMANHOS DE CONFECÇÃO (O Segredo do Brás)
+  const ordemTamanhos = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG', 'G1', 'G2', 'G3', 'G4', 'U', 'ÚNICO', 'PADRÃO'];
+  const ordenarTamanhos = (a, b) => {
+    const indexA = ordemTamanhos.indexOf(a.toUpperCase());
+    const indexB = ordemTamanhos.indexOf(b.toUpperCase());
+    
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    return a.localeCompare(b);
+  };
+
+  const dispararMensagemTelegram = async (mensagemTexto, mensagemCarregamento) => {
+    const token = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
+    const chatId = import.meta.env.VITE_TELEGRAM_CHAT_ID;
+
+    if (!token || !chatId) {
+      toast.error("Configuração do Telegram ausente no arquivo .env!");
+      return;
+    }
+
+    const toastId = toast.loading(mensagemCarregamento);
+
+    try {
+      const url = `https://api.telegram.org/bot${token}/sendMessage`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: mensagemTexto, parse_mode: 'Markdown' })
       });
-      texto += "\n";
-    });
-    navigator.clipboard.writeText(texto);
-    toast.success("Lista copiada para o WhatsApp!");
+
+      if (response.ok) {
+        toast.success("Mensagem enviada pro Telegram!", { id: toastId });
+      } else {
+        throw new Error("Erro na API do Telegram");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Falha ao enviar mensagem.", { id: toastId });
+    }
   };
+
+  const enviarResumoVendasTelegram = () => {
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    let mensagem = `📊 *RESUMO DE VENDAS DO DIA (${dataHoje})* 📊\n\n`;
+    mensagem += `💰 *Faturamento:* R$ ${faturamentoHoje.toFixed(2)}\n`;
+    mensagem += `👕 *Total de Peças:* ${pecasVendidas} un.\n\n`;
+    mensagem += `💳 *PIX:* R$ ${totalPix.toFixed(2)}\n`;
+    mensagem += `💵 *DINHEIRO:* R$ ${totalDinheiro.toFixed(2)}\n\n`;
+    mensagem += `-------------------------------\n`;
+    mensagem += `📋 *ITENS VENDIDOS:*\n\n`;
+
+    const produtos = Object.keys(itensVendidosAgrupados);
+    if (produtos.length === 0) {
+      mensagem += `Nenhuma venda hoje.\n`;
+    } else {
+      produtos.forEach(prod => { mensagem += `🔸 ${prod}: *${itensVendidosAgrupados[prod]} un.*\n`; });
+    }
+    dispararMensagemTelegram(mensagem, "Enviando Resumo Financeiro...");
+  };
+
+  // ✨ REPOSIÇÃO (Tamanhos Ordenados e Ícones Limpos)
+  const enviarReposicaoTelegram = () => {
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    let mensagem = `📦 *LISTA DE REPOSIÇÃO (${dataHoje})* 📦\n\n`;
+    
+    const produtosRepor = Object.keys(listaReposicao);
+    if (produtosRepor.length === 0) {
+      mensagem += `✅ Nenhuma reposição necessária.\n`;
+    } else {
+      produtosRepor.forEach(produto => {
+        mensagem += `🔶 *${produto}*\n`;
+        const tamanhos = listaReposicao[produto];
+        
+        // Ordena usando a lógica P, M, G, GG...
+        Object.keys(tamanhos).sort(ordenarTamanhos).forEach(tam => {
+          mensagem += `  ◾ *Tam: ${tam}*\n`;
+          const cores = tamanhos[tam];
+          
+          Object.keys(cores).sort().forEach(cor => {
+            mensagem += `    ▫️ ${cores[cor]}x ${cor}\n`;
+          });
+        });
+        mensagem += `\n`;
+      });
+    }
+    dispararMensagemTelegram(mensagem, "Enviando Lista de Reposição...");
+  };
+
+  const abrirEdicao = (venda) => {
+    setVendaSendoEditada(venda);
+    setModalEdicaoAberto(true);
+  };
+
+  const confirmarExclusao = (id) => {
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="font-bold text-gray-800 text-sm">Deseja excluir esta venda? O valor sairá do faturamento.</p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors">Cancelar</button>
+          <button onClick={() => { toast.dismiss(t.id); executarExclusao(id); }} className="px-3 py-1.5 bg-red-600 text-white hover:bg-red-700 rounded-lg text-xs font-bold transition-colors shadow-sm">Sim, Excluir</button>
+        </div>
+      </div>
+    ), { duration: 6000, id: `confirm-${id}` }); 
+  };
+
+  const executarExclusao = async (id) => {
+    const toastId = toast.loading("Apagando venda...");
+    const { error } = await supabase.from('vendas').delete().eq('id', id);
+    if (!error) {
+      toast.success("Venda apagada com sucesso!", { id: toastId });
+      buscarVendasDeHoje(); 
+    } else {
+      toast.error("Erro ao apagar venda.", { id: toastId });
+    }
+  };
+
+  if (!aberto) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={fechar}>
-      <div className="bg-gray-50 w-full max-w-xl h-[85vh] rounded-3xl flex flex-col shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
-        
-        <div className="bg-white border-b border-gray-200 p-5 flex justify-between items-center z-10 shrink-0">
-          <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">📊 Painel Diário</h2>
-          <button onClick={fechar} className="bg-gray-100 hover:bg-gray-200 text-gray-600 w-8 h-8 rounded-full font-bold active:scale-95 transition-colors">X</button>
-        </div>
-
-        <div className="flex p-2 bg-white border-b border-gray-100 shrink-0">
-          <button onClick={() => setAbaAtiva('resumo')} className={`flex-1 py-3 text-sm font-black rounded-xl transition-colors ${abaAtiva === 'resumo' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Visão Geral</button>
-          <button onClick={() => setAbaAtiva('historico')} className={`flex-1 py-3 text-sm font-black rounded-xl transition-colors ${abaAtiva === 'historico' ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Histórico por Cliente</button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5 custom-scrollbar pb-8">
+    <>
+      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+        <div className="bg-gray-100 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
           
-          {abaAtiva === 'resumo' && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">Faturamento Hoje</p>
-                  <p className="text-2xl font-black text-green-600">R$ {faturamentoTotal.toFixed(2)}</p>
-                </div>
-                <div className="bg-white p-4 rounded-2xl border shadow-sm">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase">Peças Vendidas</p>
-                  <p className="text-2xl font-black text-blue-600">{pecasVendidas} un.</p>
-                </div>
-              </div>
+          <div className="px-6 py-4 bg-white border-b border-gray-200 flex justify-between items-center shrink-0">
+            <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">
+              📊 Fechamento do Dia
+            </h2>
+            <button onClick={fechar} className="text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors">
+              X
+            </button>
+          </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-black text-gray-700 flex items-center gap-2">📦 Precisa Repor na Banca:</h3>
-                  {reposicaoNecessaria.length > 0 && (
-                    <button onClick={copiarListaReposicao} className="bg-gray-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 shadow-sm flex items-center gap-1">✈️ Enviar Lista</button>
-                  )}
+          <div className="px-6 pt-4 bg-white shrink-0">
+            <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-200 mb-4">
+              <button onClick={() => setAbaAtiva('GERAL')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${abaAtiva === 'GERAL' ? 'bg-white text-blue-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:bg-gray-100'}`}>Visão Geral</button>
+              <button onClick={() => setAbaAtiva('HISTORICO')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${abaAtiva === 'HISTORICO' ? 'bg-white text-blue-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:bg-gray-100'}`}>Histórico por Cliente</button>
+            </div>
+          </div>
+
+          <div className="p-4 md:p-6 overflow-y-auto custom-scrollbar flex-1">
+            {carregando ? (
+              <div className="text-center py-10 font-bold text-gray-500">Calculando fechamento... ⏳</div>
+            ) : abaAtiva === 'GERAL' ? (
+              <div className="space-y-6 animate-fade-in">
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="border border-green-200 p-4 rounded-2xl bg-green-50 shadow-sm">
+                    <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-1">Faturamento Total</p>
+                    <p className="text-3xl font-black text-green-700 truncate">R$ {faturamentoHoje.toFixed(2)}</p>
+                  </div>
+                  <div className="border border-blue-200 p-4 rounded-2xl bg-blue-50 shadow-sm">
+                    <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-1">Peças Vendidas</p>
+                    <p className="text-3xl font-black text-blue-700">{pecasVendidas} <span className="text-sm font-bold opacity-70">un.</span></p>
+                  </div>
                 </div>
 
-                {reposicaoNecessaria.length === 0 ? (
-                  <div className="bg-green-50 border border-green-200 text-green-700 p-6 rounded-2xl text-center font-bold">A banca está 100% abastecida! ✨</div>
-                ) : (
-                  <div className="space-y-4">
-                    {Object.entries(reposicaoAgrupada).map(([nome, itens]) => (
-                      <div key={nome} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                        <div className="bg-gray-50 p-3 border-b flex justify-between items-center">
-                          <h4 className="font-black text-gray-800 uppercase text-sm tracking-tight">▼ {nome}</h4>
-                          <span className="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded-full border border-red-100">{itens.reduce((sum, i) => sum + i.repor, 0)} pçs p/ repor</span>
-                        </div>
-                        <div className="divide-y divide-gray-100">
-                          {itens.map(p => (
-                            <div key={p.id} className="p-3 flex justify-between items-center hover:bg-gray-50 transition-colors">
-                              <div>
-                                <p className="font-bold text-gray-800 text-sm">Tam: <span className="text-blue-600 font-black">{p.tam}</span> <span className="text-gray-300 font-normal mx-1">|</span> {p.cor}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[9px] font-bold text-gray-400 uppercase">Saco {p.saco || '-'}</p>
-                                <p className="font-black text-red-600 text-sm">Puxar {p.repor}</p>
-                              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="border border-gray-200 p-4 rounded-2xl bg-white shadow-sm flex justify-between items-center">
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Em PIX</p>
+                      <p className="text-lg font-black text-gray-800">R$ {totalPix.toFixed(2)}</p>
+                    </div>
+                    <span className="text-2xl">💳</span>
+                  </div>
+                  <div className="border border-gray-200 p-4 rounded-2xl bg-white shadow-sm flex justify-between items-center">
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Em Dinheiro</p>
+                      <p className="text-lg font-black text-gray-800">R$ {totalDinheiro.toFixed(2)}</p>
+                    </div>
+                    <span className="text-2xl">💵</span>
+                  </div>
+                </div>
+
+                <button onClick={enviarResumoVendasTelegram} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl active:scale-95 transition-all shadow-lg shadow-blue-500/30 uppercase tracking-widest flex items-center justify-center gap-2">
+                  <span className="text-xl">📊</span> Enviar Resumo Financeiro
+                </button>
+
+                <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm mt-6">
+                  <div className="bg-white px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                    <h3 className="font-black text-gray-800 text-sm flex items-center gap-2">📦 Precisa Repor na Banca:</h3>
+                    <button onClick={enviarReposicaoTelegram} className="bg-gray-800 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-black uppercase flex items-center gap-2 transition-colors active:scale-95 shadow-sm">
+                      <span>✈️</span> Enviar Lista
+                    </button>
+                  </div>
+                  
+                  <div className="p-4 space-y-4">
+                    {Object.keys(listaReposicao).length === 0 ? (
+                      <p className="text-center text-gray-400 font-bold text-sm py-4">Nenhuma venda de catálogo hoje.</p>
+                    ) : (
+                      Object.keys(listaReposicao).map(produto => {
+                        const tamanhos = listaReposicao[produto];
+                        
+                        let totalProduto = 0;
+                        Object.values(tamanhos).forEach(cores => {
+                          totalProduto += Object.values(cores).reduce((a, b) => a + b, 0);
+                        });
+                        
+                        return (
+                          <div key={produto} className="border border-gray-200 rounded-xl p-3 bg-gray-50">
+                            <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200">
+                              <h4 className="font-black text-gray-800 uppercase text-sm">▼ {produto}</h4>
+                              <span className="text-[10px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{totalProduto} pçs p/ repor</span>
                             </div>
-                          ))}
+                            
+                            {/* ✨ RENDERIZANDO COM A ORDEM CERTA DE ROUPA ✨ */}
+                            <div className="space-y-3">
+                              {Object.keys(tamanhos).sort(ordenarTamanhos).map(tam => (
+                                <div key={tam} className="bg-white rounded-lg border border-gray-100 overflow-hidden shadow-sm">
+                                  <div className="bg-gray-100 px-3 py-1.5 border-b border-gray-100">
+                                    <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Tamanho: <span className="text-gray-900">{tam}</span></span>
+                                  </div>
+                                  <div className="px-3 py-2 space-y-1">
+                                    {Object.keys(tamanhos[tam]).sort().map(cor => (
+                                      <div key={cor} className="flex justify-between items-center text-xs">
+                                        <span className="font-bold text-gray-700">{cor}</span>
+                                        <span className="font-black text-red-600">{tamanhos[tam][cor]} un.</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              <div className="space-y-4 animate-fade-in">
+                {vendasHoje.length === 0 ? (
+                  <p className="text-center text-gray-400 font-bold py-10">Nenhuma venda registrada hoje.</p>
+                ) : (
+                  vendasHoje.map((venda, index) => (
+                    <div key={venda.id} className="border border-gray-200 rounded-2xl bg-white shadow-sm overflow-hidden">
+                      
+                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-gray-800 text-sm">Venda #{vendasHoje.length - index}</span>
+                          <span className="text-xs font-bold text-gray-400 bg-white px-2 py-0.5 rounded border border-gray-200">
+                            {new Date(venda.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </span>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <button onClick={() => abrirEdicao(venda)} className="flex-1 sm:flex-none bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors flex items-center justify-center gap-1 border border-blue-100 hover:border-blue-600">
+                            <span>✏️</span> EDITAR
+                          </button>
+                          <button onClick={() => confirmarExclusao(venda.id)} className="bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors flex items-center justify-center border border-red-100 hover:border-red-600" title="Excluir Venda">
+                            🗑️
+                          </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+
+                      <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                          <p className="font-black text-gray-700 text-sm md:text-base">
+                            {venda.quantidade}x {venda.produto_nome} 
+                            <span className="font-bold text-gray-400 text-xs ml-1">(Tam: {venda.produto_tam} | {venda.produto_cor})</span>
+                          </p>
+                          <span className={`inline-block mt-2 text-[10px] font-black uppercase px-2 py-1 rounded ${venda.forma_pagamento === 'PIX' ? 'bg-teal-50 text-teal-700 border border-teal-100' : 'bg-green-50 text-green-700 border border-green-100'}`}>
+                            PAGO EM: {venda.forma_pagamento}
+                          </span>
+                        </div>
+                        <span className="font-black text-xl text-gray-900 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
+                          R$ {parseFloat(venda.total_item).toFixed(2)}
+                        </span>
+                      </div>
+
+                    </div>
+                  ))
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {abaAtiva === 'historico' && (
-            <div className="space-y-4 animate-fade-in">
-              {Object.values(transacoes).length === 0 ? (
-                <div className="text-center text-gray-400 font-bold p-10">Nenhuma venda registrada hoje.</div>
-              ) : (
-                Object.values(transacoes).sort((a,b) => new Date(b.hora) - new Date(a.hora)).map((t, index) => (
-                  <div key={t.id} className="bg-white border-2 border-gray-100 rounded-2xl p-4 shadow-sm hover:border-blue-200 transition-colors group relative mt-4">
-                    
-                    <div className="absolute -top-3 -right-3 flex gap-2">
-                      <button 
-                        onClick={() => setVendaSelecionada(t)}
-                        className="bg-blue-100 hover:bg-blue-600 text-blue-600 hover:text-white border-2 border-white shadow-md p-2 rounded-xl transition-all font-black text-xs active:scale-95"
-                      >
-                        ✏️ EDITAR VENDA
-                      </button>
-                    </div>
-
-                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100 pr-16">
-                      <span className="font-black text-gray-800">Venda #{Object.values(transacoes).length - index}</span>
-                      <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-md">{new Date(t.hora).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                    </div>
-                    
-                    <div className="space-y-1.5 mb-4">
-                      {t.itens.map(item => (
-                        <div key={item.id} className="flex justify-between text-xs md:text-sm border-l-2 border-transparent hover:border-blue-300 pl-2 transition-all">
-                          <span className="text-gray-600"><span className="font-bold text-gray-900">{item.quantidade}x</span> {item.produto_nome} (Tam: {item.produto_tam} | {item.produto_cor})</span>
-                          <span className="font-bold text-gray-800">R$ {parseFloat(item.total_item).toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
-                      <span className={`text-[10px] font-black uppercase px-2 py-1 rounded tracking-wider ${t.forma_pagamento === 'PIX' ? 'bg-teal-100 text-teal-700' : 'bg-green-100 text-green-700'}`}>
-                        PAGO EM: {t.forma_pagamento}
-                      </span>
-                      <span className="font-black text-lg text-gray-900">R$ {t.total.toFixed(2)}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* RENDERIZA O MODAL FILHO QUE CRIAMOS */}
-      <ModalEdicaoVenda 
-        vendaSelecionada={vendaSelecionada}
-        fechar={() => setVendaSelecionada(null)}
-        produtos={produtos}
-        buscarVendasDoDia={buscarVendasDoDia}
-      />
-      
-    </div>
+      {modalEdicaoAberto && (
+        <ModalEdicaoVenda 
+          venda={vendaSendoEditada}
+          fechar={() => {
+            setModalEdicaoAberto(false);
+            setVendaSendoEditada(null);
+          }} 
+          produtos={produtos}
+          atualizarVendas={buscarVendasDeHoje} 
+        />
+      )}
+    </>
   );
 }
