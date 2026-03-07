@@ -12,7 +12,6 @@ export default function Sidebar({
   setMenuMobileAberto 
 }) {
   
-  // ✨ SUBIMOS O FINANCEIRO PRO MENU PRINCIPAL!
   const menuPrincipal = [
     { id: 'PDV', nome: 'Ponto de Venda', icone: '🛒' },
     { id: 'BI', nome: 'Dashboard (BI)', icone: '📈' },
@@ -35,12 +34,19 @@ export default function Sidebar({
       `}>
         
         <div className="h-14 md:h-16 flex items-center justify-between px-6 border-b border-gray-800 shrink-0 bg-gray-950/50">
-          <div className="flex items-center gap-2">
+          
+          {/* ✨ LOGO TRANSFORMADA EM BOTÃO HOME ✨ */}
+          <div 
+            onClick={() => { setTelaAtiva('PDV'); setMenuMobileAberto(false); }}
+            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity active:scale-95"
+            title="Ir para o Ponto de Venda"
+          >
             <span className="text-2xl drop-shadow-md">⚡</span>
             <span className="font-black italic text-xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
               BancaFlash
             </span>
           </div>
+
           <button 
             onClick={() => setMenuMobileAberto(false)}
             className="md:hidden text-gray-400 hover:text-white text-xl p-2 active:scale-95"
@@ -110,7 +116,6 @@ export default function Sidebar({
               >
                 <span className="text-lg drop-shadow-md">⚡</span> Bater Estoque
               </button>
-              {/* Apagamos o botão vermelho daqui! Ele subiu pro menu principal */}
             </div>
           </div>
 

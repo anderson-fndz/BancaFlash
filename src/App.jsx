@@ -14,8 +14,9 @@ import LocalizadorEstoque from './components/LocalizadorEstoque';
 import ModalReposicao from './components/ModalReposicao';
 import ModalConciliacao from './components/ModalConciliacao'; 
 import DashboardBI from './components/DashboardBI';
-// ✨ IMPORTANDO A NOVA TELA DE FINANCEIRO
 import TelaFinanceiro from './components/TelaFinanceiro';
+// ✨ IMPORTANDO A NOVA TELA DE PERFIL
+import Perfil from './components/Perfil';
 
 export default function App() {
   const [sessao, setSessao] = useState(null);
@@ -196,7 +197,8 @@ export default function App() {
       />
 
       <div className="flex-1 flex flex-col h-full overflow-hidden relative pt-14 md:pt-0">
-        <Header setMenuMobileAberto={setMenuMobileAberto} />        
+        {/* ✨ PASSANDO A FUNÇÃO setTelaAtiva PARA O HEADER MUDAR A TELA ✨ */}
+        <Header setMenuMobileAberto={setMenuMobileAberto} setTelaAtiva={setTelaAtiva} />        
         
         <main className="flex-1 overflow-y-auto relative">
           {/* ✨ RENDERIZAÇÃO DAS TELAS PRINCIPAIS AQUI ✨ */}
@@ -206,6 +208,8 @@ export default function App() {
             <DashboardBI />
           ) : telaAtiva === 'FINANCEIRO' ? (
             <TelaFinanceiro />
+          ) : telaAtiva === 'PERFIL' ? (
+            <Perfil />
           ) : null}
         </main>
 
