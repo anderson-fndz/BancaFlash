@@ -45,23 +45,24 @@ export default function Sidebar({
         ${menuMobileAberto ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         
-        <div className="h-14 md:h-16 flex items-center justify-between px-6 border-b border-gray-800/50 shrink-0 bg-[#0B0F19]">
+{/* LOGO AREA - Ajustado para Mobile */}
+        <div className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6 border-b border-slate-800 shrink-0 bg-slate-950/50 gap-2">
           <div 
             onClick={() => { setTelaAtiva('PDV'); setMenuMobileAberto(false); }}
-            className="flex items-center gap-2 cursor-pointer group transition-transform active:scale-95"
+            className="flex items-center gap-2 cursor-pointer group transition-transform active:scale-95 overflow-hidden"
             title="Ir para o Ponto de Venda"
           >
-            <div className="bg-gradient-to-br from-orange-400 to-red-500 p-1.5 rounded-lg shadow-lg shadow-orange-500/20 group-hover:shadow-orange-500/40 transition-shadow">
-              <Zap size={20} className="text-white fill-white" />
+            <div className="bg-gradient-to-br from-orange-400 to-red-500 p-1.5 rounded-lg shadow-lg shadow-orange-500/20 shrink-0">
+              <Zap size={18} className="text-white fill-white" />
             </div>
-            <span className="font-black italic text-xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
+            <span className="font-black italic text-lg md:text-xl tracking-tight text-white drop-shadow-sm truncate">
               BancaFlash
             </span>
           </div>
 
           <button 
             onClick={() => setMenuMobileAberto(false)}
-            className="md:hidden text-gray-500 hover:text-white transition-colors"
+            className="md:hidden text-slate-400 hover:text-white transition-colors shrink-0 p-1"
           >
             <X size={24} />
           </button>

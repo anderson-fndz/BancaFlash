@@ -15,7 +15,6 @@ import ModalReposicao from './components/ModalReposicao';
 import ModalConciliacao from './components/ModalConciliacao'; 
 import DashboardBI from './components/DashboardBI';
 import TelaFinanceiro from './components/TelaFinanceiro';
-// ✨ IMPORTANDO A NOVA TELA DE PERFIL
 import Perfil from './components/Perfil';
 
 export default function App() {
@@ -71,21 +70,43 @@ export default function App() {
     setCarregando(false);
   };
 
-  const transferirParaBanca = async (transferencias) => {
+  // ✨ FUNÇÃO ATUALIZADA: Recebe a direção da transferência ✨
+  const transferirParaBanca = async (transferencias, direcao = 'SACO_PARA_BANCA') => {
     const idsTransf = Object.keys(transferencias);
     if (idsTransf.length === 0) return;
     setCarregando(true);
-    for (const id of idsTransf) {
-      const qtd = transferencias[id];
-      const produto = produtos.find(p => p.id === parseInt(id));
-      if (!produto || produto.estoque_saco < qtd) continue;
-      const novoEstoqueSaco = produto.estoque_saco - qtd;
-      const novoEstoqueBanca = (produto.estoque_banca || 0) + qtd;
-      await supabase.from('produtos').update({ estoque_saco: novoEstoqueSaco, estoque_banca: novoEstoqueBanca }).eq('id', id);
+    const loadingId = toast.loading("Transferindo...");
+    
+    try {
+      for (const id of idsTransf) {
+        const qtd = transferencias[id];
+        const produto = produtos.find(p => p.id === parseInt(id) || p.id === id);
+        
+        if (produto) {
+          let novaBanca, novoSaco;
+          
+          if (direcao === 'SACO_PARA_BANCA') {
+            if (produto.estoque_saco < qtd) continue; // Trava de segurança
+            novaBanca = (produto.estoque_banca || 0) + qtd;
+            novoSaco = (produto.estoque_saco || 0) - qtd;
+          } else {
+            // BANCA_PARA_SACO
+            if (produto.estoque_banca < qtd) continue; // Trava de segurança
+            novaBanca = (produto.estoque_banca || 0) - qtd;
+            novoSaco = (produto.estoque_saco || 0) + qtd;
+          }
+
+          await supabase.from('produtos').update({ estoque_saco: novoSaco, estoque_banca: novaBanca }).eq('id', id);
+        }
+      }
+      await buscarProdutos();
+      setCarregando(false);
+      toast.success("Transferência concluída!", { id: loadingId });
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro na transferência.", { id: loadingId });
+      setCarregando(false);
     }
-    await buscarProdutos();
-    setCarregando(false);
-    toast.success("Peças transferidas para a Banca com sucesso!");
   };
 
   const adicionarAoCarrinho = (produto) => {
@@ -169,7 +190,7 @@ export default function App() {
     toast.success("Venda finalizada com sucesso!");
   };
 
-  if (verificandoSessao) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-gray-50">Iniciando BancaFlash... ⚡</div>;
+  if (verificandoSessao) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50">Iniciando BancaFlash... ⚡</div>;
 
   if (!sessao) {
     return (
@@ -180,10 +201,10 @@ export default function App() {
     );
   }
 
-  if (carregando && produtos.length === 0) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-gray-50">Sincronizando sua Banca... ⏳</div>;
+  if (carregando && produtos.length === 0) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50">Sincronizando sua Banca... ⏳</div>;
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans relative">
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans relative">
       <Toaster position="top-center" reverseOrder={false} containerStyle={{ zIndex: 999999 }} />
 
       <Sidebar 
@@ -196,12 +217,11 @@ export default function App() {
         menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto}
       />
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative pt-14 md:pt-0">
-        {/* ✨ PASSANDO A FUNÇÃO setTelaAtiva PARA O HEADER MUDAR A TELA ✨ */}
+      {/* ✨ CORREÇÃO AQUI: Removido o pt-14 do mobile ✨ */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         <Header setMenuMobileAberto={setMenuMobileAberto} setTelaAtiva={setTelaAtiva} />        
         
-        <main className="flex-1 overflow-y-auto relative">
-          {/* ✨ RENDERIZAÇÃO DAS TELAS PRINCIPAIS AQUI ✨ */}
+        <main className="flex-1 overflow-y-auto relative bg-slate-50">
           {telaAtiva === 'PDV' ? (
             <Vitrine produtos={produtos} setProdutoAberto={setProdutoAberto} />
           ) : telaAtiva === 'BI' ? (
