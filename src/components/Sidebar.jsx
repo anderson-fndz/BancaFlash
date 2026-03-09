@@ -1,4 +1,16 @@
 import React from 'react';
+import { 
+  ShoppingCart, 
+  BarChart3, 
+  CircleDollarSign, 
+  Search, 
+  PackagePlus, 
+  Settings, 
+  Calculator, 
+  ClipboardCheck,
+  Zap,
+  X
+} from 'lucide-react';
 
 export default function Sidebar({ 
   telaAtiva, 
@@ -13,35 +25,35 @@ export default function Sidebar({
 }) {
   
   const menuPrincipal = [
-    { id: 'PDV', nome: 'Ponto de Venda', icone: '🛒' },
-    { id: 'BI', nome: 'Dashboard (BI)', icone: '📈' },
-    { id: 'FINANCEIRO', nome: 'Financeiro', icone: '💸' }
+    { id: 'PDV', nome: 'Ponto de Venda', icone: ShoppingCart },
+    { id: 'BI', nome: 'Dashboard (BI)', icone: BarChart3 },
+    { id: 'FINANCEIRO', nome: 'Financeiro', icone: CircleDollarSign }
   ];
 
   return (
     <>
       {menuMobileAberto && (
         <div 
-          className="fixed inset-0 bg-black/60 z-40 md:hidden animate-fade-in" 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-fade-in" 
           onClick={() => setMenuMobileAberto(false)}
         ></div>
       )}
 
       <aside className={`
         fixed md:static inset-y-0 left-0 z-50
-        w-64 bg-gray-900 text-white flex flex-col transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
+        w-64 bg-[#0B0F19] text-gray-300 flex flex-col transition-transform duration-300 ease-in-out border-r border-gray-800 shadow-2xl md:shadow-none
         ${menuMobileAberto ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         
-        <div className="h-14 md:h-16 flex items-center justify-between px-6 border-b border-gray-800 shrink-0 bg-gray-950/50">
-          
-          {/* ✨ LOGO TRANSFORMADA EM BOTÃO HOME ✨ */}
+        <div className="h-14 md:h-16 flex items-center justify-between px-6 border-b border-gray-800/50 shrink-0 bg-[#0B0F19]">
           <div 
             onClick={() => { setTelaAtiva('PDV'); setMenuMobileAberto(false); }}
-            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity active:scale-95"
+            className="flex items-center gap-2 cursor-pointer group transition-transform active:scale-95"
             title="Ir para o Ponto de Venda"
           >
-            <span className="text-2xl drop-shadow-md">⚡</span>
+            <div className="bg-gradient-to-br from-orange-400 to-red-500 p-1.5 rounded-lg shadow-lg shadow-orange-500/20 group-hover:shadow-orange-500/40 transition-shadow">
+              <Zap size={20} className="text-white fill-white" />
+            </div>
             <span className="font-black italic text-xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">
               BancaFlash
             </span>
@@ -49,80 +61,98 @@ export default function Sidebar({
 
           <button 
             onClick={() => setMenuMobileAberto(false)}
-            className="md:hidden text-gray-400 hover:text-white text-xl p-2 active:scale-95"
+            className="md:hidden text-gray-500 hover:text-white transition-colors"
           >
-            ✕
+            <X size={24} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8 custom-scrollbar">
           
           <div>
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-2">Principal</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-3">Visão Geral</p>
             <div className="space-y-1">
-              {menuPrincipal.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => { setTelaAtiva(item.id); setMenuMobileAberto(false); }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all active:scale-95
-                    ${telaAtiva === item.id 
-                      ? (item.id === 'FINANCEIRO' ? 'bg-red-600 text-white shadow-lg shadow-red-900/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-900/20') 
-                      : 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}
-                  `}
-                >
-                  <span className="text-lg">{item.icone}</span>
-                  {item.nome}
-                </button>
-              ))}
+              {menuPrincipal.map(item => {
+                const Icone = item.icone;
+                const isActive = telaAtiva === item.id;
+                
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => { setTelaAtiva(item.id); setMenuMobileAberto(false); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-all active:scale-95 group
+                      ${isActive 
+                        ? 'bg-blue-600/10 text-blue-500' 
+                        : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'}
+                    `}
+                  >
+                    <Icone size={20} className={isActive ? 'text-blue-500' : 'text-gray-500 group-hover:text-gray-300'} strokeWidth={isActive ? 2.5 : 2} />
+                    <span className="text-sm">{item.nome}</span>
+                    
+                    {isActive && <div className="ml-auto w-1 h-5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.6)]"></div>}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div>
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-2">Mercadoria</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-3">Estoque</p>
             <div className="space-y-1">
               <button
                 onClick={() => { setModalLocalizadorAberto(true); setMenuMobileAberto(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-gray-400 hover:bg-gray-800 hover:text-gray-100 transition-all active:scale-95"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-gray-400 hover:bg-gray-800/50 hover:text-gray-200 transition-all active:scale-95 group"
               >
-                <span className="text-lg">🔍</span> Localizador
+                <Search size={20} className="text-gray-500 group-hover:text-gray-300" strokeWidth={2} />
+                <span className="text-sm">Localizador</span>
               </button>
+              
               <button
                 onClick={() => { setModalReposicaoAberto(true); setMenuMobileAberto(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-green-400 hover:bg-gray-800 hover:text-green-300 transition-all active:scale-95 border border-transparent hover:border-green-900/50 bg-green-900/10"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all active:scale-95"
               >
-                <span className="text-lg drop-shadow-md">📦</span> Reposição (Entrada)
+                <PackagePlus size={20} className="text-emerald-500" strokeWidth={2.5} />
+                <span className="text-sm">Reposição (Entrada)</span>
               </button>
+              
               <button
                 onClick={() => { setModalAdminAberto(true); setMenuMobileAberto(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-gray-400 hover:bg-gray-800 hover:text-gray-100 transition-all active:scale-95"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-gray-400 hover:bg-gray-800/50 hover:text-gray-200 transition-all active:scale-95 group"
               >
-                <span className="text-lg">⚙️</span> Gerenciar Produtos
+                <Settings size={20} className="text-gray-500 group-hover:text-gray-300" strokeWidth={2} />
+                <span className="text-sm">Gerenciar Produtos</span>
               </button>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-gray-800">
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-2">Final do Dia</p>
+          <div>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3 px-3">Fechamento</p>
             <div className="space-y-1">
               <button
                 onClick={() => { setModalResumoAberto(true); setMenuMobileAberto(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-gray-400 hover:bg-gray-800 hover:text-gray-100 transition-all active:scale-95"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-gray-400 hover:bg-gray-800/50 hover:text-gray-200 transition-all active:scale-95 group"
               >
-                <span className="text-lg">📊</span> Fechamento de Caixa
+                <Calculator size={20} className="text-gray-500 group-hover:text-gray-300" strokeWidth={2} />
+                <span className="text-sm">Fechar Caixa</span>
               </button>
+              
               <button
                 onClick={() => { setModalConciliacaoAberto(true); setMenuMobileAberto(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-amber-400 hover:bg-gray-800 hover:text-amber-300 transition-all active:scale-95 border border-transparent hover:border-amber-900/50 bg-amber-900/10"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 transition-all active:scale-95 group border border-transparent hover:border-amber-500/20"
               >
-                <span className="text-lg drop-shadow-md">⚡</span> Bater Estoque
+                <ClipboardCheck size={20} className="text-amber-600 group-hover:text-amber-500" strokeWidth={2} />
+                <span className="text-sm">Bater Estoque</span>
               </button>
             </div>
           </div>
 
         </div>
         
-        <div className="p-4 border-t border-gray-800 text-center bg-gray-950/30">
-          <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">BancaFlash v1.0</p>
+        <div className="p-4 border-t border-gray-800/50 bg-[#070A11] flex items-center justify-center">
+          <div className="flex items-center gap-2 opacity-50">
+            <Zap size={12} className="text-gray-400" />
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">BancaFlash v1.0</p>
+          </div>
         </div>
       </aside>
     </>

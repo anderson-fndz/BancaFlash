@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Search, ChevronRight, PackageSearch } from 'lucide-react';
 
 export default function Vitrine({ produtos, setProdutoAberto }) {
   const [busca, setBusca] = useState('');
@@ -12,13 +13,16 @@ export default function Vitrine({ produtos, setProdutoAberto }) {
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto animate-fade-in">
       
-      <div className="sticky top-0 z-10 bg-gray-50 pb-4 pt-2">
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">🔍</span>
+      {/* BARRA DE BUSCA PREMIUM */}
+      <div className="sticky top-0 z-10 bg-slate-50/90 backdrop-blur-md pb-4 pt-2">
+        <div className="relative group">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search size={20} className="text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+          </div>
           <input 
             type="text" 
             placeholder="Buscar modelo na banca..." 
-            className="w-full pl-12 pr-4 py-4 rounded-2xl shadow-sm border border-gray-200 text-lg font-bold text-gray-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all"
+            className="w-full pl-11 pr-4 py-4 rounded-2xl shadow-sm border border-slate-200 text-base md:text-lg font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all bg-white"
             value={busca}
             onChange={e => setBusca(e.target.value)}
           />
@@ -26,18 +30,22 @@ export default function Vitrine({ produtos, setProdutoAberto }) {
       </div>
 
       <div>
-        <h2 className="font-bold text-gray-400 mb-4 uppercase tracking-widest text-xs ml-2">Catálogo Disponível</h2>
+        <h2 className="font-bold text-slate-400 mb-4 uppercase tracking-widest text-xs ml-2">Catálogo Disponível</h2>
         
+        {/* ESTADO VAZIO (EMPTY STATE) PROFISSIONAL */}
         {nomesFiltrados.length === 0 && (
-          <div className="text-center mt-16 bg-white p-10 rounded-3xl border border-dashed border-gray-300">
-            <span className="text-5xl">🕵️‍♂️</span>
-            <p className="text-gray-500 font-bold mt-4 text-lg">Nenhum modelo encontrado com "{busca}"</p>
+          <div className="text-center mt-12 bg-white p-12 rounded-3xl border border-dashed border-slate-300 flex flex-col items-center justify-center">
+            <div className="bg-slate-50 p-4 rounded-full mb-4">
+              <PackageSearch size={48} className="text-slate-300" strokeWidth={1.5} />
+            </div>
+            <p className="text-slate-600 font-black text-lg">Nenhum modelo encontrado com "{busca}"</p>
+            <p className="text-slate-400 text-sm mt-1 font-medium">Tente buscar por outro nome ou verifique a ortografia.</p>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* GRID DE PRODUTOS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
           {nomesFiltrados.map(nome => {
-            // Calcula informações extras do produto para mostrar no Card
             const variacoes = produtos.filter(p => p.nome === nome);
             const estoqueTotal = variacoes.reduce((acc, p) => acc + (p.estoque_banca || 0) + (p.estoque_saco || 0), 0);
             const precoBase = variacoes[0]?.preco || 0;
@@ -49,23 +57,25 @@ export default function Vitrine({ produtos, setProdutoAberto }) {
                   setProdutoAberto(nome);
                   setBusca(''); 
                 }}
-                className="w-full bg-white p-5 rounded-2xl shadow-sm border border-gray-100 text-left hover:border-blue-300 hover:shadow-md active:scale-[0.98] transition-all flex flex-col group"
+                className="w-full bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 text-left hover:border-blue-500 hover:shadow-md hover:ring-1 hover:ring-blue-500 active:scale-[0.98] transition-all flex flex-col group"
               >
                 <div className="flex justify-between items-start w-full">
-                  <span className="text-lg font-black text-gray-800 uppercase tracking-tight pr-4">{nome}</span>
-                  <div className="bg-gray-50 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-600 w-10 h-10 rounded-full flex items-center justify-center font-black transition-colors shrink-0">
-                    ➔
+                  <span className="text-lg font-black text-slate-800 uppercase tracking-tight pr-4 group-hover:text-blue-700 transition-colors">{nome}</span>
+                  <div className="bg-slate-50 text-slate-400 group-hover:bg-blue-600 group-hover:text-white w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all shrink-0">
+                    <ChevronRight size={20} strokeWidth={2.5} />
                   </div>
                 </div>
                 
-                <div className="flex justify-between items-end w-full mt-4 pt-4 border-t border-gray-50">
+                <div className="flex justify-between items-end w-full mt-6 pt-4 border-t border-slate-100">
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">A partir de</p>
-                    <p className="font-black text-green-600 text-lg">R$ {precoBase.toFixed(2)}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">A partir de</p>
+                    <p className="font-black text-emerald-600 text-lg md:text-xl leading-none">R$ {precoBase.toFixed(2)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Estoque</p>
-                    <p className="font-bold text-gray-600">{estoqueTotal} un.</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Estoque</p>
+                    <p className={`font-black text-base md:text-lg leading-none ${estoqueTotal <= 5 ? 'text-red-500' : 'text-slate-700'}`}>
+                      {estoqueTotal} <span className="text-xs font-bold opacity-70">un.</span>
+                    </p>
                   </div>
                 </div>
               </button>

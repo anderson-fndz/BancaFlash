@@ -93,8 +93,6 @@ export default function TelaFinanceiro() {
         if (!apiKey) throw new Error("Chave API não encontrada no .env");
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        
-        // ✨ ATUALIZADO CONFORME A SUA DOCUMENTAÇÃO DO GOOGLE ✨
         const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
         const prompt = `
@@ -135,11 +133,15 @@ export default function TelaFinanceiro() {
       return;
     }
 
+    // ✨ AQUI ESTÁ A MÁGICA: Pegamos quem está logado antes de salvar
+    const { data: { user } } = await supabase.auth.getUser();
+
     const dadosDespesa = {
       descricao: finalDescricao, 
       valor: finalValor, 
       forma_pagamento: formaPagamento, 
-      categoria: finalCategoria
+      categoria: finalCategoria,
+      user_id: user.id // 🔒 A CHAVE SENDO ATRELADA AO GASTO AQUI!
     };
 
     if (editandoId) {

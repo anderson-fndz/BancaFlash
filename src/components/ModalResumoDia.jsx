@@ -61,7 +61,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     return acc;
   }, {});
 
-  // ✨ A ORDEM DE TAMANHOS DE CONFECÇÃO (O Segredo do Brás)
   const ordemTamanhos = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG', 'G1', 'G2', 'G3', 'G4', 'U', 'ÚNICO', 'PADRÃO'];
   const ordenarTamanhos = (a, b) => {
     const indexA = ordemTamanhos.indexOf(a.toUpperCase());
@@ -73,18 +72,35 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     return a.localeCompare(b);
   };
 
+  // ✨ MÁGICA DO SAAS: TELEGRAM DINÂMICO ✨
   const dispararMensagemTelegram = async (mensagemTexto, mensagemCarregamento) => {
-    const token = import.meta.env.VITE_TELEGRAM_BOT_TOKEN;
-    const chatId = import.meta.env.VITE_TELEGRAM_CHAT_ID;
-
-    if (!token || !chatId) {
-      toast.error("Configuração do Telegram ausente no arquivo .env!");
-      return;
-    }
-
     const toastId = toast.loading(mensagemCarregamento);
 
     try {
+      const token = import.meta.env.VITE_TELEGRAM_BOT_TOKEN; // Nosso bot global do sistema
+      
+      // Busca o Chat ID do cliente específico que está clicando no botão
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      const { data: perfil } = await supabase
+        .from('perfil')
+        .select('telegram_chat_id')
+        .eq('user_id', user.id)
+        .single();
+
+      const chatId = perfil?.telegram_chat_id;
+
+      if (!token) {
+        toast.error("Erro no Servidor: Bot não configurado.", { id: toastId });
+        return;
+      }
+
+      if (!chatId) {
+        toast.error("Vincule seu Telegram nas Configurações da Loja primeiro!", { id: toastId });
+        return;
+      }
+
       const url = `https://api.telegram.org/bot${token}/sendMessage`;
       const response = await fetch(url, {
         method: 'POST',
@@ -122,7 +138,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     dispararMensagemTelegram(mensagem, "Enviando Resumo Financeiro...");
   };
 
-  // ✨ REPOSIÇÃO (Tamanhos Ordenados e Ícones Limpos)
   const enviarReposicaoTelegram = () => {
     const dataHoje = new Date().toLocaleDateString('pt-BR');
     let mensagem = `📦 *LISTA DE REPOSIÇÃO (${dataHoje})* 📦\n\n`;
@@ -135,7 +150,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
         mensagem += `🔶 *${produto}*\n`;
         const tamanhos = listaReposicao[produto];
         
-        // Ordena usando a lógica P, M, G, GG...
         Object.keys(tamanhos).sort(ordenarTamanhos).forEach(tam => {
           mensagem += `  ◾ *Tam: ${tam}*\n`;
           const cores = tamanhos[tam];
@@ -266,7 +280,6 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                               <span className="text-[10px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{totalProduto} pçs p/ repor</span>
                             </div>
                             
-                            {/* ✨ RENDERIZANDO COM A ORDEM CERTA DE ROUPA ✨ */}
                             <div className="space-y-3">
                               {Object.keys(tamanhos).sort(ordenarTamanhos).map(tam => (
                                 <div key={tam} className="bg-white rounded-lg border border-gray-100 overflow-hidden shadow-sm">

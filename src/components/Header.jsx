@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabase';
+import { Menu, Zap, Settings, LogOut, ChevronDown, User } from 'lucide-react';
 
 export default function Header({ setMenuMobileAberto, setTelaAtiva }) {
   const [email, setEmail] = useState('');
@@ -9,11 +10,9 @@ export default function Header({ setMenuMobileAberto, setTelaAtiva }) {
 
   useEffect(() => {
     const buscarDados = async () => {
-      // Pega o e-mail do usuário logado
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setEmail(user.email);
 
-      // Pega o nome da loja no banco de dados
       const { data } = await supabase.from('perfil').select('nome_loja').limit(1).single();
       if (data && data.nome_loja) {
         setNomeLoja(data.nome_loja);
@@ -24,12 +23,11 @@ export default function Header({ setMenuMobileAberto, setTelaAtiva }) {
     
     buscarDados();
 
-    // ✨ ESCUTADOR MÁGICO: Atualiza o nome no topo assim que o Perfil salva
     const escutarAtualizacao = (evento) => {
       if (evento.detail) {
-        setNomeLoja(evento.detail); // Atualiza o estado local com o valor vindo do evento
+        setNomeLoja(evento.detail);
       } else {
-        buscarDados(); // Fallback caso o evento venha vazio
+        buscarDados();
       }
     };
 
@@ -58,62 +56,70 @@ export default function Header({ setMenuMobileAberto, setTelaAtiva }) {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 h-14 md:h-16 flex items-center justify-between px-4 md:px-6 z-20 shrink-0 shadow-sm relative">
+    <header className="bg-white border-b border-gray-200 h-14 md:h-16 flex items-center justify-between px-4 md:px-6 z-20 shrink-0 shadow-sm relative transition-colors duration-300">
+      
       <div className="flex items-center gap-3">
         <button
           onClick={() => setMenuMobileAberto(true)}
-          className="md:hidden text-gray-800 text-2xl focus:outline-none active:scale-95 hover:bg-gray-100 w-10 h-10 rounded-lg flex items-center justify-center transition-colors"
+          className="md:hidden text-gray-500 focus:outline-none active:scale-95 hover:bg-gray-100 w-10 h-10 rounded-lg flex items-center justify-center transition-colors"
         >
-          ☰
+          <Menu size={24} strokeWidth={2.5} />
         </button>
         
-        {/* LOGO HOME MOBILE */}
         <div 
           onClick={() => setTelaAtiva('PDV')}
-          className="md:hidden flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity active:scale-95"
+          className="md:hidden flex items-center gap-1.5 cursor-pointer hover:opacity-70 transition-opacity active:scale-95"
         >
-          <span className="text-xl">⚡</span>
-          <span className="font-black text-gray-900 italic tracking-tight">BancaFlash</span>
+          <div className="bg-gradient-to-br from-orange-400 to-red-500 p-1 rounded-md shadow-sm">
+            <Zap size={16} className="text-white fill-white" />
+          </div>
+          <span className="font-black text-slate-900 italic tracking-tight text-lg">BancaFlash</span>
         </div>
       </div>
 
       <div className="flex items-center gap-3 ml-auto" ref={menuRef}>
         <button 
           onClick={() => setMenuAberto(!menuAberto)}
-          className="flex items-center gap-3 group hover:bg-gray-50 px-2 py-1.5 rounded-xl transition-colors active:scale-95 text-left relative"
+          className="flex items-center gap-2 group hover:bg-slate-50 p-1.5 pr-2 rounded-xl transition-all active:scale-95 text-left relative border border-transparent hover:border-slate-200"
         >
-          <div className="hidden md:flex flex-col items-end">
-            <span className="text-xs font-black text-gray-800 uppercase tracking-widest">{nomeLoja}</span>
-            <span className="text-[10px] font-bold text-blue-600 truncate max-w-[150px]">{email || 'Carregando...'}</span>
+          <div className="hidden md:flex flex-col items-end mr-1">
+            <span className="text-xs font-black text-slate-800 uppercase tracking-widest leading-tight">{nomeLoja}</span>
+            <span className="text-[10px] font-bold text-slate-500 truncate max-w-[150px] leading-tight mt-0.5">{email || 'Carregando...'}</span>
           </div>
 
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-black text-sm md:text-base border-2 border-white shadow-sm uppercase group-hover:bg-blue-600 group-hover:text-white transition-colors">
-            {nomeLoja ? nomeLoja.charAt(0) : (email ? email.charAt(0) : '👤')}
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-full flex items-center justify-center font-black text-sm md:text-base shadow-md shadow-blue-900/20 uppercase transition-transform group-hover:scale-105">
+            {nomeLoja ? nomeLoja.charAt(0) : (email ? email.charAt(0) : <User size={18} />)}
           </div>
+          
+          <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 hidden md:block ${menuAberto ? 'rotate-180' : ''}`} />
         </button>
 
         {menuAberto && (
-          <div className="absolute top-14 right-4 md:right-6 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-fade-in z-50">
-            <div className="p-3 border-b border-gray-50 bg-gray-50 md:hidden text-left">
-               <p className="text-xs font-black text-gray-800">{nomeLoja}</p>
-               <p className="text-[10px] font-bold text-gray-500">{email}</p>
+          <div className="absolute top-14 right-4 md:right-6 w-60 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 overflow-hidden animate-fade-in z-50">
+            <div className="p-4 border-b border-slate-50 bg-slate-50/50 md:hidden text-left">
+               <p className="text-xs font-black text-slate-800 uppercase tracking-wider">{nomeLoja}</p>
+               <p className="text-[10px] font-bold text-slate-500 mt-0.5">{email}</p>
             </div>
             
-            <button 
-              onClick={abrirPerfil}
-              className="w-full text-left px-4 py-3 text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center gap-2"
-            >
-              <span>⚙️</span> Configurações da Loja
-            </button>
-            
-            <div className="w-full h-px bg-gray-100"></div>
-            
-            <button 
-              onClick={fazerLogout}
-              className="w-full text-left px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
-            >
-              <span>🚪</span> Sair do Sistema
-            </button>
+            <div className="p-2">
+              <button 
+                onClick={abrirPerfil}
+                className="w-full text-left px-3 py-2.5 text-sm font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-700 rounded-xl transition-colors flex items-center gap-3"
+              >
+                <Settings size={18} className="text-slate-400" />
+                Configurações da Loja
+              </button>
+              
+              <div className="w-full h-px bg-slate-100 my-1"></div>
+              
+              <button 
+                onClick={fazerLogout}
+                className="w-full text-left px-3 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition-colors flex items-center gap-3"
+              >
+                <LogOut size={18} className="text-red-400" />
+                Sair do Sistema
+              </button>
+            </div>
           </div>
         )}
       </div>
