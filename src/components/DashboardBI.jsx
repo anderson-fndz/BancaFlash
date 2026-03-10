@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'; 
-import { TrendingUp, Banknote, ShoppingBag, PieChart, Activity, CalendarDays, Zap, Shirt, Palette, Scaling } from 'lucide-react';
+import { TrendingUp, Banknote, ShoppingBag, PieChart, Activity, CalendarDays, Zap } from 'lucide-react';
 
 export default function DashboardBI() {
   const [periodo, setPeriodo] = useState('7dias'); 
@@ -11,12 +11,6 @@ export default function DashboardBI() {
   
   const [dadosGraficoLinha, setDadosGraficoLinha] = useState([]); 
   const [dadosGraficoSemana, setDadosGraficoSemana] = useState([]); 
-  
-  // ✨ NOVOS DADOS PARA OS RANKINGS ✨
-  const [rankingModelos, setRankingModelos] = useState([]); 
-  const [rankingCores, setRankingCores] = useState([]); 
-  const [rankingTamanhos, setRankingTamanhos] = useState([]); 
-  
   const [dadosCategoriasDespesas, setDadosCategoriasDespesas] = useState([]);
 
   const [todasVendas, setTodasVendas] = useState([]);
@@ -149,22 +143,7 @@ export default function DashboardBI() {
       Peças: baseBarra[dia].qtd
     })));
 
-    // ✨ 4. INTELIGÊNCIA DE RANKINGS (Top Modelos, Cores e Tamanhos) ✨
-    const calcRanking = (campo) => {
-      const agrupado = vendas.reduce((acc, v) => {
-        if(v[campo] && v[campo] !== 'PENDENTE') {
-          acc[v[campo]] = (acc[v[campo]] || 0) + parseInt(v.quantidade); 
-        }
-        return acc;
-      }, {});
-      return Object.entries(agrupado).map(([nome, qtd]) => ({ nome, qtd })).sort((a, b) => b.qtd - a.qtd).slice(0, 5);
-    };
-
-    setRankingModelos(calcRanking('produto_nome'));
-    setRankingCores(calcRanking('produto_cor'));
-    setRankingTamanhos(calcRanking('produto_tam'));
-
-    // 5. DESPESAS POR CATEGORIA
+    // 4. DESPESAS POR CATEGORIA
     const agrupadoCat = despesas.reduce((acc, d) => {
       const cat = d.categoria || 'OUTROS';
       acc[cat] = (acc[cat] || 0) + parseFloat(d.valor); return acc;
@@ -174,30 +153,6 @@ export default function DashboardBI() {
 
   const maxEixoY = dadosGraficoLinha.length > 0 ? Math.max(...dadosGraficoLinha.map(d => d.Faturamento)) * 1.1 : 'auto';
 
-  // Componente Reutilizável para as Listinhas de Ranking
-  const RankingList = ({ icone: Icon, titulo, dados, cor }) => (
-    <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm flex-1 flex flex-col">
-      <h3 className="font-black text-slate-800 mb-4 text-xs uppercase flex items-center gap-1.5 border-b border-slate-100 pb-2">
-        <Icon size={14} className={cor} /> {titulo}
-      </h3>
-      {dados.length === 0 ? (
-        <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest text-center py-6">Sem dados</p>
-      ) : (
-        <div className="space-y-2.5">
-          {dados.map((item, i) => (
-            <div key={item.nome} className="flex justify-between items-center text-xs">
-              <div className="flex items-center gap-2 overflow-hidden pr-2">
-                <span className={`w-5 h-5 rounded flex items-center justify-center font-black text-[10px] shrink-0 ${i === 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>{i + 1}º</span>
-                <span className="font-bold text-slate-700 truncate uppercase">{item.nome}</span>
-              </div>
-              <span className="font-black text-slate-900 shrink-0 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{item.qtd} <span className="text-[9px] text-slate-400 font-bold">un.</span></span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-8 animate-fade-in pb-24 md:pb-8 space-y-6">
       
@@ -205,10 +160,10 @@ export default function DashboardBI() {
       <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm">
         <div>
           <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-            <PieChart className="text-blue-600" size={32} /> Inteligência de Negócio
+            <PieChart className="text-blue-600" size={32} /> Visão Financeira
           </h1>
           <p className="text-slate-500 font-bold mt-1 text-sm flex items-center gap-1">
-            <Zap size={14} className="text-amber-500" /> Transforme dados em lucro.
+            <Zap size={14} className="text-amber-500" /> Acompanhe a saúde do seu caixa.
           </p>
         </div>
         
@@ -224,7 +179,7 @@ export default function DashboardBI() {
       {carregando ? (
         <div className="flex-1 flex flex-col items-center justify-center font-bold text-blue-600 text-lg md:text-xl py-32 animate-pulse gap-4">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          Processando Big Data da Banca...
+          Processando Balanço Financeiro...
         </div>
       ) : (
         <div className="space-y-6 animate-fade-in">
@@ -254,13 +209,6 @@ export default function DashboardBI() {
               <p className={`text-[10px] font-black uppercase tracking-widest mb-1 relative z-10 ${kpis.lucroLiquido >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>Lucro Líquido Real</p>
               <p className={`text-3xl font-black truncate relative z-10 ${kpis.lucroLiquido >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>R$ {kpis.lucroLiquido.toFixed(2)}</p>
             </div>
-          </div>
-
-          {/* O NOVO CÉREBRO: ONDE O DINHEIRO ESTÁ (Rankings) */}
-          <div className="flex flex-col lg:flex-row gap-4">
-            <RankingList icone={Shirt} titulo="Top Modelos (Vendas)" dados={rankingModelos} cor="text-blue-500" />
-            <RankingList icone={Palette} titulo="Cores Mais Desejadas" dados={rankingCores} cor="text-purple-500" />
-            <RankingList icone={Scaling} titulo="Tamanhos que Saem" dados={rankingTamanhos} cor="text-emerald-500" />
           </div>
 
           {/* GRÁFICO PRINCIPAL DE LINHA (Financeiro) */}
