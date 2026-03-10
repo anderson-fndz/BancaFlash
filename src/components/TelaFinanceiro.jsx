@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import toast from 'react-hot-toast';
 import { GoogleGenerativeAI } from '@google/generative-ai'; 
+import { ArrowDownRight, Sparkles, Receipt, Trash2, Edit3, PieChart, CalendarDays } from 'lucide-react'; // ✨ Ícones Premium
 
 export default function TelaFinanceiro() {
   const [carregando, setCarregando] = useState(false);
@@ -74,19 +75,20 @@ export default function TelaFinanceiro() {
 
   const salvarDespesa = async () => {
     if (!descricao.trim()) {
-      toast.error("O que você gastou?"); 
+      toast.error("Conta pra gente o que você gastou!"); 
       return;
     }
 
     setCarregando(true);
-    const loadingId = toast.loading(editandoId ? "Atualizando..." : "Registrando...");
+    const loadingId = toast.loading(editandoId ? "Atualizando..." : "Registrando...", { style: { background: '#0f172a', color: '#fff' } });
 
     let finalDescricao = descricao.trim().toUpperCase();
     let finalValor = valorRaw;
     let finalCategoria = categoria;
 
+    // ✨ A Mágica da IA entra em ação aqui
     if (!editandoId && (valorRaw === 0 || categoria === 'OUTROS')) {
-      toast.loading("🪄 IA organizando sua despesa...", { id: loadingId });
+      toast.loading("🪄 IA lendo sua despesa...", { id: loadingId });
       
       try {
         const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -128,12 +130,11 @@ export default function TelaFinanceiro() {
     }
 
     if (finalValor <= 0) {
-      toast.error("Por favor, digite um valor ou anote na descrição (Ex: Lanche 25).", { id: loadingId });
+      toast.error("Coloca um valor aí, ou digita ele na descrição (Ex: Lanche 25).", { id: loadingId });
       setCarregando(false);
       return;
     }
 
-    // ✨ AQUI ESTÁ A MÁGICA: Pegamos quem está logado antes de salvar
     const { data: { user } } = await supabase.auth.getUser();
 
     const dadosDespesa = {
@@ -141,17 +142,17 @@ export default function TelaFinanceiro() {
       valor: finalValor, 
       forma_pagamento: formaPagamento, 
       categoria: finalCategoria,
-      user_id: user.id // 🔒 A CHAVE SENDO ATRELADA AO GASTO AQUI!
+      user_id: user.id 
     };
 
     if (editandoId) {
       const { error } = await supabase.from('despesas').update(dadosDespesa).eq('id', editandoId);
       if (error) toast.error("Erro ao atualizar.", { id: loadingId });
-      else { toast.success("Despesa atualizada!", { id: loadingId }); cancelarEdicao(); buscarDespesas(); }
+      else { toast.success("Gasto atualizado!", { id: loadingId }); cancelarEdicao(); buscarDespesas(); }
     } else {
       const { error } = await supabase.from('despesas').insert([dadosDespesa]);
       if (error) toast.error("Erro ao registrar.", { id: loadingId });
-      else { toast.success("Despesa registrada com Sucesso!", { id: loadingId }); cancelarEdicao(); buscarDespesas(); }
+      else { toast.success("Gasto registrado!", { id: loadingId }); cancelarEdicao(); buscarDespesas(); }
     }
     setCarregando(false);
   };
@@ -159,16 +160,16 @@ export default function TelaFinanceiro() {
   const excluirDespesa = async (id) => {
     toast((t) => (
       <div className="flex flex-col gap-3">
-        <p className="font-bold text-gray-800 text-sm">Deseja excluir este gasto?</p>
+        <p className="font-bold text-slate-800 text-sm">Apagar esse gasto?</p>
         <div className="flex gap-2 justify-end">
-          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg text-xs font-bold transition-colors">Cancelar</button>
+          <button onClick={() => toast.dismiss(t.id)} className="px-4 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg text-xs font-bold transition-colors">Cancelar</button>
           <button onClick={async () => {
             toast.dismiss(t.id);
             const loadingId = toast.loading("Apagando...");
             const { error } = await supabase.from('despesas').delete().eq('id', id);
             if (!error) { toast.success("Gasto apagado!", { id: loadingId }); buscarDespesas(); } 
             else { toast.error("Erro ao apagar.", { id: loadingId }); }
-          }} className="px-3 py-1.5 bg-red-600 text-white hover:bg-red-700 rounded-lg text-xs font-bold transition-colors shadow-sm">Sim, Excluir</button>
+          }} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg text-xs font-bold transition-colors shadow-sm">Sim, Apagar</button>
         </div>
       </div>
     ), { duration: 5000, id: `confirm-despesa-${id}` });
@@ -183,70 +184,81 @@ export default function TelaFinanceiro() {
   const categoriasOrdenadas = Object.entries(despesasPorCategoria).sort((a, b) => b[1] - a[1]);
 
   return (
-    <div className="p-4 md:p-8 animate-fade-in max-w-7xl mx-auto pb-32 md:pb-8">
+    <div className="w-full max-w-7xl mx-auto p-4 md:p-8 animate-fade-in pb-32 md:pb-8 flex flex-col h-full">
       
+      {/* ✨ HEADER COMPACTO ✨ */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-6 md:mb-8 gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-black text-gray-800 tracking-tight flex items-center gap-2 md:gap-3">
-            <span className="text-3xl md:text-4xl">💸</span> Saídas e Sangrias
+          <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+            <ArrowDownRight className="text-red-500" size={32} /> Saídas e Gastos
           </h1>
-          <p className="text-gray-500 font-bold mt-1 uppercase text-[10px] md:text-xs tracking-widest hidden md:block">
-            Registre os gastos com ajuda da Inteligência Artificial
+          <p className="text-slate-500 font-bold mt-1 text-xs tracking-widest uppercase flex items-center gap-1.5">
+            <Sparkles size={14} className="text-amber-500" /> A IA organiza tudo pra você
           </p>
         </div>
         
-        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
-          <button onClick={() => setFiltroTempo('hoje')} className={`flex-1 min-w-[70px] px-3 md:px-4 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-colors uppercase whitespace-nowrap ${filtroTempo === 'hoje' ? 'bg-red-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>Hoje</button>
-          <button onClick={() => setFiltroTempo('7dias')} className={`flex-1 min-w-[70px] px-3 md:px-4 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-colors uppercase whitespace-nowrap ${filtroTempo === '7dias' ? 'bg-red-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>7 Dias</button>
-          <button onClick={() => setFiltroTempo('30dias')} className={`flex-1 min-w-[70px] px-3 md:px-4 py-2 md:py-2.5 text-[10px] md:text-xs font-black rounded-lg transition-colors uppercase whitespace-nowrap ${filtroTempo === '30dias' ? 'bg-red-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>30 Dias</button>
+        <div className="flex bg-slate-100 p-1 rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+          {['hoje', '7dias', '30dias'].map(p => (
+            <button 
+              key={p} 
+              onClick={() => setFiltroTempo(p)} 
+              className={`flex-1 px-4 py-2 text-[10px] md:text-xs font-black rounded-lg transition-colors uppercase whitespace-nowrap ${filtroTempo === p ? 'bg-white text-red-600 shadow-sm border border-slate-200' : 'text-slate-500 hover:bg-slate-200'}`}
+            >
+              {p === 'hoje' ? 'Hoje' : p.replace('dias', ' Dias')}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        <div className="lg:col-span-5 space-y-6">
-          <div className={`p-5 md:p-6 rounded-2xl md:rounded-3xl shadow-sm border-2 relative overflow-hidden transition-colors ${editandoId ? 'bg-orange-50 border-orange-200' : 'bg-white border-gray-200'}`}>
-            <div className={`absolute top-0 left-0 w-full h-1 ${editandoId ? 'bg-orange-500' : 'bg-red-500'}`}></div>
+        {/* ✨ FORMULÁRIO DE LANÇAMENTO ✨ */}
+        <div className="lg:col-span-5 space-y-6 sticky top-6">
+          <div className={`p-5 md:p-6 rounded-3xl shadow-sm border transition-colors ${editandoId ? 'bg-orange-50/50 border-orange-300' : 'bg-white border-slate-200'}`}>
             
-            <div className="flex justify-between items-center mb-4 md:mb-5">
-              <h2 className={`font-black text-base md:text-lg uppercase flex items-center gap-2 ${editandoId ? 'text-orange-800' : 'text-gray-800'}`}>
-                {editandoId ? '✏️ Editando Saída' : '📝 Lançar Despesa'}
+            <div className="flex justify-between items-center mb-5">
+              <h2 className={`font-black text-sm md:text-base uppercase tracking-widest flex items-center gap-2 ${editandoId ? 'text-orange-700' : 'text-slate-800'}`}>
+                {editandoId ? <><Edit3 size={18} /> Editando Gasto</> : <><Receipt size={18} /> Lançar Nova Despesa</>}
               </h2>
               {editandoId && (
-                <button onClick={cancelarEdicao} className="text-[9px] md:text-[10px] font-black uppercase text-gray-500 bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded transition-colors">Cancelar</button>
+                <button onClick={cancelarEdicao} className="text-[10px] font-black uppercase text-slate-500 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition-colors">Cancelar</button>
               )}
             </div>
 
-            <div className="space-y-3 md:space-y-4">
+            <div className="space-y-4">
               <div>
-                <label className={`text-[9px] md:text-[10px] font-bold uppercase ${editandoId ? 'text-orange-700' : 'text-gray-500'}`}>O que você gastou?</label>
+                <label className={`text-[10px] font-bold uppercase tracking-widest ${editandoId ? 'text-orange-600/80' : 'text-slate-400'}`}>O que você gastou?</label>
                 <input 
                   type="text" 
-                  placeholder="Ex: Marmita 25, comprei tecido 1500" 
-                  className="w-full p-3 md:p-4 border-2 rounded-xl font-black uppercase mt-1 focus:outline-none transition-all text-xs md:text-sm border-gray-200 focus:border-red-400" 
+                  placeholder="Ex: Marmita 25, Comprei Tecido 1500..." 
+                  className={`w-full p-3.5 rounded-xl font-bold mt-1.5 outline-none transition-all text-sm md:text-base border bg-slate-50 focus:bg-white focus:ring-4 ${editandoId ? 'border-orange-300 focus:border-orange-500 focus:ring-orange-100' : 'border-slate-200 focus:border-red-500 focus:ring-red-50 text-slate-700'}`}
                   value={descricao} 
                   onChange={e => setDescricao(e.target.value)} 
                   onKeyDown={e => e.key === 'Enter' && salvarDespesa()} 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={`text-[9px] md:text-[10px] font-bold uppercase ${editandoId ? 'text-orange-700' : 'text-gray-500'}`}>Valor (R$)</label>
-                  <div className="relative mt-1">
-                    <span className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 font-black text-red-600">R$</span>
+                  <label className={`text-[10px] font-bold uppercase tracking-widest ${editandoId ? 'text-orange-600/80' : 'text-slate-400'}`}>Valor (R$)</label>
+                  <div className="relative mt-1.5">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-400">R$</span>
                     <input 
                       type="text" 
                       placeholder="0,00" 
-                      className="w-full p-3 md:p-4 pl-9 md:pl-11 border-2 border-gray-200 rounded-xl font-black text-red-600 focus:border-red-400 outline-none text-base md:text-lg bg-white" 
+                      className={`w-full p-3.5 pl-10 rounded-xl font-black outline-none text-base border bg-slate-50 focus:bg-white focus:ring-4 transition-all ${editandoId ? 'border-orange-300 focus:border-orange-500 focus:ring-orange-100 text-orange-700' : 'border-slate-200 focus:border-red-500 focus:ring-red-50 text-red-600'}`}
                       value={valorFormatado} 
                       onChange={handleValorChange} 
                     />
                   </div>
                 </div>
                 <div>
-                  <label className={`text-[9px] md:text-[10px] font-bold uppercase ${editandoId ? 'text-orange-700' : 'text-gray-500'}`}>Pagamento</label>
-                  <select className="w-full p-3 md:p-4 border-2 border-gray-200 rounded-xl font-black mt-1 focus:border-red-400 outline-none bg-white text-xs md:text-sm text-gray-700" value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)}>
+                  <label className={`text-[10px] font-bold uppercase tracking-widest ${editandoId ? 'text-orange-600/80' : 'text-slate-400'}`}>Como pagou?</label>
+                  <select 
+                    className={`w-full p-3.5 rounded-xl font-bold mt-1.5 outline-none border bg-slate-50 text-sm transition-all ${editandoId ? 'border-orange-300 focus:border-orange-500 text-orange-800' : 'border-slate-200 focus:border-red-500 text-slate-700'}`}
+                    value={formaPagamento} 
+                    onChange={e => setFormaPagamento(e.target.value)}
+                  >
                     <option value="DINHEIRO">Dinheiro</option>
                     <option value="PIX">PIX</option>
                   </select>
@@ -254,46 +266,69 @@ export default function TelaFinanceiro() {
               </div>
 
               <div>
-                <label className={`text-[9px] md:text-[10px] font-bold uppercase flex justify-between ${editandoId ? 'text-orange-700' : 'text-gray-500'}`}>
-                  <span>Categoria <span className="font-normal opacity-70">(Opcional)</span></span>
+                <label className={`text-[10px] font-bold uppercase tracking-widest flex justify-between ${editandoId ? 'text-orange-600/80' : 'text-slate-400'}`}>
+                  <span>Categoria</span>
+                  <span className="font-normal opacity-70">Opcional</span>
                 </label>
-                <select className="w-full p-3 md:p-4 border-2 border-gray-100 rounded-xl font-bold mt-1 focus:border-gray-300 outline-none bg-gray-50 text-gray-600 text-xs md:text-sm" value={categoria} onChange={e => setCategoria(e.target.value)}>
+                <select 
+                  className={`w-full p-3.5 rounded-xl font-bold mt-1.5 outline-none border bg-slate-50 text-sm transition-all ${editandoId ? 'border-orange-300 focus:border-orange-500 text-orange-800' : 'border-slate-200 focus:border-red-500 text-slate-700'}`}
+                  value={categoria} 
+                  onChange={e => setCategoria(e.target.value)}
+                >
                   {categoriasDisponiveis.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </div>
 
-              <button onClick={salvarDespesa} disabled={carregando} className={`w-full text-white font-black py-3 md:py-4 rounded-xl mt-2 active:scale-95 uppercase shadow-lg transition-all text-xs md:text-sm ${editandoId ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/30' : 'bg-red-600 hover:bg-red-700 shadow-red-500/30'}`}>
-                {editandoId ? 'ATUALIZAR DESPESA' : 'SALVAR DESPESA'}
+              {!editandoId && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2 mt-2">
+                  <Sparkles size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-amber-700 font-bold leading-tight">
+                    Com preguiça de preencher tudo? Digita só "Lanche 25" lá em cima e clica em salvar. A Mágica faz o resto.
+                  </p>
+                </div>
+              )}
+
+              <button 
+                onClick={salvarDespesa} 
+                disabled={carregando} 
+                className={`w-full text-white font-black py-4 rounded-xl mt-4 active:scale-95 uppercase tracking-widest text-xs shadow-md transition-all flex items-center justify-center gap-2 ${editandoId ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20' : 'bg-red-600 hover:bg-red-700 shadow-red-500/20'}`}
+              >
+                {editandoId ? 'ATUALIZAR GASTO' : 'SALVAR GASTO'}
               </button>
             </div>
           </div>
         </div>
 
-        <div className="lg:col-span-7 space-y-4 md:space-y-6 mt-4 md:mt-0">
+        {/* ✨ RESUMO E HISTÓRICO ✨ */}
+        <div className="lg:col-span-7 space-y-6">
           
-          <div className="bg-white rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 overflow-hidden p-4 md:p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-black text-gray-800 text-xs md:text-sm uppercase">📊 Para onde foi o dinheiro?</h3>
-              <p className="text-sm md:text-lg font-black text-red-600">Total: R$ {totalDespesas.toFixed(2)}</p>
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden p-5 md:p-6">
+            <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-4">
+              <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest flex items-center gap-2">
+                <PieChart size={16} className="text-red-500" /> Resumo dos Gastos
+              </h3>
+              <p className="text-sm md:text-lg font-black text-red-600 bg-red-50 px-3 py-1 rounded-lg">R$ {totalDespesas.toFixed(2)}</p>
             </div>
             
             {categoriasOrdenadas.length === 0 ? (
-              <p className="text-xs text-gray-400 font-bold text-center py-4">Sem dados no período.</p>
+              <div className="text-center py-8">
+                <p className="text-slate-400 font-bold text-sm">Tudo limpo por aqui! Nenhum gasto.</p>
+              </div>
             ) : (
-              <div className="space-y-3 md:space-y-4">
+              <div className="space-y-4">
                 {categoriasOrdenadas.map(([cat, val]) => {
                   const porcentagem = ((val / totalDespesas) * 100).toFixed(0);
                   return (
-                    <div key={cat}>
-                      <div className="flex justify-between items-end mb-1">
-                        <span className="text-[10px] md:text-xs font-black text-gray-600 uppercase">{cat}</span>
+                    <div key={cat} className="group">
+                      <div className="flex justify-between items-end mb-1.5">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest group-hover:text-red-600 transition-colors">{cat}</span>
                         <div className="text-right flex items-center">
-                          <span className="text-[9px] md:text-[10px] text-gray-400 font-bold mr-2">{porcentagem}%</span>
-                          <span className="text-xs md:text-sm font-black text-gray-800">R$ {val.toFixed(2)}</span>
+                          <span className="text-[10px] text-slate-400 font-bold mr-2">{porcentagem}%</span>
+                          <span className="text-sm font-black text-slate-800">R$ {val.toFixed(2)}</span>
                         </div>
                       </div>
-                      <div className="w-full bg-gray-100 rounded-full h-2 md:h-2.5 overflow-hidden">
-                        <div className="bg-gradient-to-r from-red-400 to-red-600 h-full rounded-full" style={{ width: `${porcentagem}%` }}></div>
+                      <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                        <div className="bg-gradient-to-r from-red-400 to-red-600 h-full rounded-full transition-all duration-500" style={{ width: `${porcentagem}%` }}></div>
                       </div>
                     </div>
                   );
@@ -302,36 +337,49 @@ export default function TelaFinanceiro() {
             )}
           </div>
 
-          <div className="bg-white rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="bg-gray-50 px-4 md:px-6 py-3 md:py-4 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="font-black text-gray-800 text-xs md:text-sm uppercase">📋 Histórico do Período</h3>
-              <span className="text-[9px] md:text-[10px] font-bold text-gray-400 bg-white px-2 py-1 rounded border border-gray-200">{despesas.length} itens</span>
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+            <div className="bg-slate-50 px-5 md:px-6 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+              <h3 className="font-black text-slate-800 text-xs uppercase tracking-widest flex items-center gap-2">
+                <CalendarDays size={16} className="text-blue-500" /> Histórico de Saídas
+              </h3>
+              <span className="text-[10px] font-bold text-slate-500 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">{despesas.length} itens</span>
             </div>
             
-            <div className="p-3 md:p-4 custom-scrollbar max-h-[300px] md:max-h-[400px] overflow-y-auto">
+            <div className="p-4 custom-scrollbar max-h-[400px] overflow-y-auto">
               {despesas.length === 0 ? (
-                <div className="text-center text-gray-400 font-bold py-12">Nenhum gasto registrado! 🎉</div>
+                <div className="text-center py-10">
+                  <p className="text-slate-400 font-bold">Nenhum registro para mostrar.</p>
+                </div>
               ) : (
-                <div className="space-y-2 md:space-y-3">
+                <div className="space-y-3">
                   {despesas.map(d => (
-                    <div key={d.id} className={`border-2 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-sm flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 md:gap-3 transition-colors ${editandoId === d.id ? 'bg-orange-50 border-orange-300' : 'bg-white border-gray-50 hover:border-red-100'}`}>
-                      <div>
-                        <p className="font-black text-gray-800 text-xs md:text-sm uppercase leading-tight">{d.descricao}</p>
-                        <div className="flex flex-wrap items-center gap-1.5 md:gap-2 mt-1 md:mt-2">
-                          <span className="text-[8px] md:text-[9px] font-black uppercase text-purple-600 bg-purple-50 px-1.5 md:px-2 py-0.5 rounded border border-purple-100">{d.categoria || 'OUTROS'}</span>
-                          <span className={`text-[8px] md:text-[9px] font-black uppercase px-1.5 md:px-2 py-0.5 rounded ${d.forma_pagamento === 'PIX' ? 'bg-teal-50 text-teal-700 border border-teal-100' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                    <div key={d.id} className={`rounded-2xl p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 transition-all border hover:shadow-sm ${editandoId === d.id ? 'bg-orange-50 border-orange-200' : 'bg-white border-slate-100 hover:border-slate-300'}`}>
+                      
+                      <div className="flex-1">
+                        <p className="font-black text-slate-800 text-sm uppercase leading-tight truncate">{d.descricao}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{d.categoria || 'OUTROS'}</span>
+                          <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${d.forma_pagamento === 'PIX' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-600'}`}>
                             {d.forma_pagamento}
                           </span>
-                          <span className="text-[9px] md:text-[10px] font-bold text-gray-400">
+                          <span className="text-[10px] font-bold text-slate-400 ml-1">
                             {new Date(d.created_at).toLocaleDateString('pt-BR')}
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 justify-end mt-2 sm:mt-0 border-t sm:border-0 pt-2 sm:pt-0 border-gray-100">
-                        <span className="font-black text-red-600 text-base md:text-lg mr-1 md:mr-2 whitespace-nowrap">R$ {parseFloat(d.valor).toFixed(2)}</span>
-                        <button onClick={() => abrirEdicao(d)} className="w-8 h-8 md:w-9 md:h-9 bg-blue-50 hover:bg-blue-600 text-blue-500 hover:text-white rounded-lg flex items-center justify-center active:scale-95 transition-colors text-xs md:text-base" title="Editar">✏️</button>
-                        <button onClick={() => excluirDespesa(d.id)} className="w-8 h-8 md:w-9 md:h-9 bg-red-50 hover:bg-red-600 text-red-500 hover:text-white rounded-lg flex items-center justify-center active:scale-95 transition-colors text-xs md:text-base" title="Excluir">🗑️</button>
+
+                      <div className="flex items-center gap-3 justify-between sm:justify-end border-t border-slate-100 pt-3 sm:border-0 sm:pt-0">
+                        <span className="font-black text-red-600 text-base md:text-lg whitespace-nowrap">R$ {parseFloat(d.valor).toFixed(2)}</span>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => abrirEdicao(d)} className="w-8 h-8 rounded-lg bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-500 flex items-center justify-center transition-colors active:scale-95" title="Editar">
+                            <Edit3 size={16} />
+                          </button>
+                          <button onClick={() => excluirDespesa(d.id)} className="w-8 h-8 rounded-lg bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors active:scale-95" title="Excluir">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
+
                     </div>
                   ))}
                 </div>

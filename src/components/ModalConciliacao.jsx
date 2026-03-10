@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import toast from 'react-hot-toast';
+import { X, ClipboardCheck, Trash2, AlertTriangle, Zap, ArrowDown, ArrowUp, CheckCircle2 } from 'lucide-react';
 
 export default function ModalConciliacao({ aberto, fechar, produtos, buscarProdutos }) {
   const [pendentes, setPendentes] = useState([]);
@@ -66,11 +67,10 @@ export default function ModalConciliacao({ aberto, fechar, produtos, buscarProdu
     return String(a.cor || '').trim().localeCompare(String(b.cor || '').trim());
   };
 
-  // 🗑️ FUNÇÃO PARA LIMPAR VENDAS ÓRFÃS/FANTASMAS
   const excluirVendasOrfas = async (nomeProduto) => {
     const vendasDesteProduto = pendentesPorProduto[nomeProduto];
     if (window.confirm(`ATENÇÃO: O modelo "${nomeProduto}" foi apagado do estoque. Deseja cancelar as ${vendasDesteProduto.length} vendas rápidas registradas dele?`)) {
-      const loadingId = toast.loading("Apagando vendas fantasmas...");
+      const loadingId = toast.loading("Apagando vendas fantasmas...", { style: { background: '#0f172a', color: '#fff' } });
       const ids = vendasDesteProduto.map(v => v.id);
       await supabase.from('vendas').delete().in('id', ids);
       await buscarPendentes();
@@ -80,7 +80,7 @@ export default function ModalConciliacao({ aberto, fechar, produtos, buscarProdu
 
   const baterEstoque = async (nomeProduto) => {
     setProcessando(true);
-    const loadingId = toast.loading(`Auditando ${nomeProduto}...`);
+    const loadingId = toast.loading(`Conferindo ${nomeProduto}...`, { style: { background: '#0f172a', color: '#fff' } });
 
     try {
       const variacoes = produtos.filter(p => p.nome === nomeProduto);
@@ -158,10 +158,10 @@ export default function ModalConciliacao({ aberto, fechar, produtos, buscarProdu
 
       await buscarProdutos();
       await buscarPendentes();
-      toast.success(`${nomeProduto} auditado e fechado!`, { id: loadingId });
+      toast.success(`${nomeProduto} conferido e atualizado!`, { id: loadingId });
 
     } catch (error) {
-      toast.error("Erro ao realizar auditoria", { id: loadingId });
+      toast.error("Erro ao bater o estoque", { id: loadingId });
       console.error(error);
     } finally {
       setProcessando(false);
@@ -174,24 +174,31 @@ export default function ModalConciliacao({ aberto, fechar, produtos, buscarProdu
   ])].sort();
 
   return (
-    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={fechar}>
-      <div className="bg-gray-50 w-full max-w-3xl h-[90vh] rounded-3xl flex flex-col shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={fechar}>
+      <div className="bg-slate-50 w-full max-w-3xl h-[90vh] rounded-3xl flex flex-col shadow-2xl overflow-hidden relative border border-slate-200/50" onClick={e => e.stopPropagation()}>
         
-        <div className="bg-indigo-600 text-white p-5 flex justify-between items-center shadow-md z-10 shrink-0">
+        {/* ✨ HEADER PREMIUM ✨ */}
+        <div className="bg-slate-900 text-white p-5 flex justify-between items-center shadow-md z-10 shrink-0">
           <div>
-            <h2 className="text-2xl font-black italic flex items-center gap-2">📋 Auditoria de Estoque</h2>
-            <p className="text-indigo-200 text-xs font-bold mt-1 uppercase tracking-widest">Confira o que sobrou na banca física</p>
+            <h2 className="text-2xl font-black flex items-center gap-2 tracking-tight">
+              <ClipboardCheck className="text-amber-500" size={28} /> Bater Estoque
+            </h2>
+            <p className="text-slate-400 text-[10px] font-bold mt-1 uppercase tracking-widest flex items-center gap-1">
+              Informe o que sobrou para o sistema descobrir as cores das Vendas Rápidas
+            </p>
           </div>
-          <button onClick={fechar} className="bg-indigo-700 hover:bg-indigo-800 w-10 h-10 rounded-full flex items-center justify-center font-black text-indigo-100 active:scale-95 transition-colors">X</button>
+          <button onClick={fechar} className="text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+            <X size={20} strokeWidth={3} />
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar pb-10">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar pb-10">
           
           {produtosParaAuditar.length === 0 ? (
-            <div className="text-center mt-20">
-              <span className="text-5xl">📦</span>
-              <p className="text-gray-400 font-black text-xl mt-4 uppercase">Estoque Zerado!</p>
-              <p className="text-gray-400 font-bold text-sm mt-1">Nenhum produto em estoque para auditar.</p>
+            <div className="text-center mt-20 bg-white p-10 rounded-3xl border border-dashed border-slate-300">
+              <ClipboardCheck size={48} className="text-slate-300 mx-auto mb-4" strokeWidth={1.5} />
+              <p className="text-slate-500 font-black text-xl uppercase tracking-tight">Tudo Certo!</p>
+              <p className="text-slate-400 font-bold text-sm mt-1">Nenhum produto pendente para bater o estoque.</p>
             </div>
           ) : (
             produtosParaAuditar.map(nomeProduto => {
@@ -199,20 +206,24 @@ export default function ModalConciliacao({ aberto, fechar, produtos, buscarProdu
               const vendasRappidas = pendentes.filter(v => v.produto_nome === nomeProduto);
               const qtdCobradaPeloSistema = vendasRappidas.reduce((acc, v) => acc + v.quantidade, 0);
 
-              // 🚨 TRATATIVA PARA PRODUTO EXCLUÍDO (FANTASMA)
+              // 🚨 PRODUTO FANTASMA
               if (variacoes.length === 0 && qtdCobradaPeloSistema > 0) {
                 return (
-                  <div key={nomeProduto} className="bg-red-50 border-2 border-red-200 rounded-2xl overflow-hidden shadow-sm mb-4">
+                  <div key={nomeProduto} className="bg-red-50 border border-red-200 rounded-2xl overflow-hidden shadow-sm mb-4 group hover:border-red-300 transition-colors">
                     <div className="p-4 flex justify-between items-center flex-col md:flex-row gap-4">
                       <div>
-                        <h3 className="font-black text-red-900 uppercase tracking-tight line-through">{nomeProduto}</h3>
-                        <p className="text-xs font-bold text-red-600 mt-1">Este produto foi deletado, mas possui <strong className="bg-red-200 px-1 rounded">{qtdCobradaPeloSistema} vendas rápidas</strong> registradas hoje.</p>
+                        <h3 className="font-black text-red-900 uppercase tracking-tight flex items-center gap-2">
+                          <AlertTriangle size={18} className="text-red-500" /> {nomeProduto}
+                        </h3>
+                        <p className="text-[10px] md:text-xs font-bold text-red-600 mt-1 uppercase tracking-wider">
+                          Produto excluído, mas possui <strong className="bg-red-200 px-1.5 py-0.5 rounded-md text-red-800">{qtdCobradaPeloSistema} vendas rápidas</strong>.
+                        </p>
                       </div>
                       <button 
                         onClick={() => excluirVendasOrfas(nomeProduto)}
-                        className="bg-red-600 hover:bg-red-700 text-white font-black px-4 py-2 rounded-xl text-xs uppercase tracking-widest shadow-md active:scale-95 shrink-0"
+                        className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-black px-4 py-2.5 rounded-xl text-[10px] uppercase tracking-widest shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
                       >
-                        🗑️ Descartar Vendas
+                        <Trash2 size={16} /> Descartar Vendas
                       </button>
                     </div>
                   </div>
@@ -228,61 +239,63 @@ export default function ModalConciliacao({ aberto, fechar, produtos, buscarProdu
               const liberadoParaFechar = totalBaixasDadas >= qtdCobradaPeloSistema;
 
               return (
-                <div key={nomeProduto} className={`border-2 rounded-2xl overflow-hidden shadow-sm transition-all duration-300 ${qtdCobradaPeloSistema > 0 ? 'border-amber-300' : 'border-gray-200'}`}>
+                <div key={nomeProduto} className={`bg-white border rounded-2xl overflow-hidden shadow-sm transition-all duration-300 ${qtdCobradaPeloSistema > 0 ? 'border-amber-300 shadow-amber-500/10' : 'border-slate-200 hover:border-slate-300'}`}>
                   
-                  <div className={`p-4 border-b flex justify-between items-center ${qtdCobradaPeloSistema > 0 ? 'bg-amber-50 border-amber-200' : 'bg-gray-100 border-gray-200'}`}>
+                  <div className={`p-4 md:p-5 border-b flex flex-col md:flex-row md:justify-between md:items-center gap-3 ${qtdCobradaPeloSistema > 0 ? 'bg-amber-50/50' : 'bg-slate-50/50'}`}>
                     <div>
-                      <h3 className={`font-black uppercase tracking-tight ${qtdCobradaPeloSistema > 0 ? 'text-amber-900' : 'text-gray-800'}`}>{nomeProduto}</h3>
+                      <h3 className={`font-black uppercase tracking-tight text-lg ${qtdCobradaPeloSistema > 0 ? 'text-amber-900' : 'text-slate-800'}`}>{nomeProduto}</h3>
                       {qtdCobradaPeloSistema > 0 && (
-                        <p className="text-xs font-bold text-amber-600 mt-1 flex items-center gap-1">
-                          <span className="bg-amber-200 px-1.5 py-0.5 rounded text-amber-900">⚡ {qtdCobradaPeloSistema} Vendas Rápidas</span> aguardando conferência
+                        <p className="text-[10px] font-bold text-amber-700 mt-1.5 flex items-center gap-1.5 uppercase tracking-wider">
+                          <span className="bg-amber-500 text-amber-950 px-1.5 py-0.5 rounded shadow-sm flex items-center gap-1"><Zap size={10} className="fill-amber-950" /> {qtdCobradaPeloSistema} Vendas Rápidas</span> 
+                          esperando você achar as peças
                         </p>
                       )}
                     </div>
                     
                     {qtdCobradaPeloSistema > 0 && (
-                      <div className="text-right">
-                        <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-full border shadow-sm transition-colors ${liberadoParaFechar ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                          {totalBaixasDadas} / {qtdCobradaPeloSistema} Faltantes Identificadas
+                      <div className="text-left md:text-right">
+                        <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-lg border shadow-sm transition-all flex md:inline-flex items-center justify-center gap-1.5 ${liberadoParaFechar ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-amber-600 border-amber-200'}`}>
+                          {liberadoParaFechar && <CheckCircle2 size={14} />}
+                          {totalBaixasDadas} / {qtdCobradaPeloSistema} Peças Vendidas Achadas
                         </span>
                       </div>
                     )}
                   </div>
 
-                  <div className="divide-y divide-gray-100 bg-white">
+                  <div className="divide-y divide-slate-100">
                     {variacoes.map(v => {
                       const estoqueOriginal = (v.estoque_banca || 0) + (v.estoque_saco || 0);
                       const valorAtual = contagem[v.id];
                       const diferenca = estoqueOriginal - (valorAtual === '' ? 0 : parseInt(valorAtual || 0));
 
                       return (
-                        <div key={v.id} className={`p-3 md:p-4 flex flex-col md:flex-row justify-between md:items-center gap-3 transition-colors ${diferenca > 0 ? 'bg-red-50/50' : 'hover:bg-gray-50'}`}>
+                        <div key={v.id} className={`p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 transition-colors ${diferenca > 0 ? 'bg-red-50/30' : 'hover:bg-slate-50/80'}`}>
                           
                           <div className="flex-1">
-                            <p className="font-bold text-gray-800 text-sm">Tam: <span className="text-indigo-600 font-black">{v.tam}</span> <span className="text-gray-300 mx-1">|</span> {v.cor}</p>
-                            <p className="text-[10px] font-bold text-gray-400 mt-0.5 uppercase tracking-widest">
-                              Sistema esperava: <span className="text-gray-600 font-black">{estoqueOriginal} un.</span>
+                            <p className="font-bold text-slate-800 text-sm md:text-base uppercase">Tam: <span className="text-blue-600 font-black">{v.tam}</span> <span className="text-slate-300 mx-1 font-normal">|</span> {v.cor}</p>
+                            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-1.5">
+                              Tinha na banca: <span className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-black">{estoqueOriginal} un.</span>
                             </p>
                           </div>
 
                           <div className="flex items-center gap-4 justify-between md:justify-end">
                             <div className="w-24 text-right">
                               {diferenca > 0 && (
-                                <span className="text-[10px] font-black text-red-600 animate-fade-in uppercase bg-red-100 px-2 py-1 rounded shadow-sm border border-red-200">
-                                  ⬇ {diferenca} Baixa(s)
+                                <span className="text-[10px] font-black text-red-600 animate-fade-in uppercase bg-red-100 px-2 py-1 rounded-md shadow-sm border border-red-200 flex items-center justify-end gap-1">
+                                  <ArrowDown size={12} strokeWidth={3} /> {diferenca} Baixa(s)
                                 </span>
                               )}
                               {diferenca < 0 && (
-                                <span className="text-[10px] font-black text-blue-600 animate-fade-in uppercase bg-blue-100 px-2 py-1 rounded shadow-sm border border-blue-200">
-                                  ⬆ {Math.abs(diferenca)} Sobra
+                                <span className="text-[10px] font-black text-blue-600 animate-fade-in uppercase bg-blue-100 px-2 py-1 rounded-md shadow-sm border border-blue-200 flex items-center justify-end gap-1">
+                                  <ArrowUp size={12} strokeWidth={3} /> {Math.abs(diferenca)} Sobra
                                 </span>
                               )}
                             </div>
 
-                            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200 shadow-inner">
+                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner">
                               <button 
                                 onClick={() => alterarContagem(v.id, -1)} 
-                                className="bg-white w-8 h-8 md:w-10 md:h-10 rounded-lg font-black text-red-500 shadow-sm active:scale-95 text-xl flex items-center justify-center border border-gray-200 hover:border-red-300 transition-colors"
+                                className="bg-white w-9 h-9 md:w-10 md:h-10 rounded-lg font-black text-slate-400 hover:text-red-600 shadow-sm active:scale-95 text-lg flex items-center justify-center transition-colors"
                               >
                                 -
                               </button>
@@ -291,14 +304,14 @@ export default function ModalConciliacao({ aberto, fechar, produtos, buscarProdu
                                 type="number" 
                                 min="0"
                                 onWheel={(e) => e.target.blur()}
-                                className="w-12 md:w-14 bg-transparent text-center font-black text-lg text-gray-800 outline-none"
+                                className="w-12 md:w-14 bg-transparent text-center font-black text-lg text-slate-800 outline-none"
                                 value={valorAtual}
                                 onChange={(e) => handleInputContagem(v.id, e.target.value)}
                               />
                               
                               <button 
                                 onClick={() => alterarContagem(v.id, 1)} 
-                                className="bg-white w-8 h-8 md:w-10 md:h-10 rounded-lg font-black text-blue-500 shadow-sm active:scale-95 text-xl flex items-center justify-center border border-gray-200 hover:border-blue-300 transition-colors"
+                                className="bg-white w-9 h-9 md:w-10 md:h-10 rounded-lg font-black text-slate-400 hover:text-blue-600 shadow-sm active:scale-95 text-lg flex items-center justify-center transition-colors"
                               >
                                 +
                               </button>
@@ -309,16 +322,23 @@ export default function ModalConciliacao({ aberto, fechar, produtos, buscarProdu
                     })}
                   </div>
 
-                  <div className="p-4 bg-gray-50 border-t border-gray-200">
+                  {/* ✨ BOTÃO DE CONFIRMAÇÃO ✨ */}
+                  <div className="p-4 bg-slate-50 border-t border-slate-200">
                     <button 
                       disabled={!liberadoParaFechar || processando}
                       onClick={() => baterEstoque(nomeProduto)}
-                      className={`w-full py-4 rounded-xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2
+                      className={`w-full py-4 rounded-xl font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 text-xs md:text-sm shadow-sm
                         ${liberadoParaFechar 
-                          ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg active:scale-95' 
-                          : 'bg-gray-300 text-gray-500 cursor-not-allowed border-2 border-transparent'}`}
+                          ? 'bg-amber-500 hover:bg-amber-600 text-amber-950 shadow-amber-500/30 active:scale-95 border border-amber-400' 
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-transparent'}`}
                     >
-                      {liberadoParaFechar ? '✔️ Confirmar Auditoria e Ajustar Estoque' : 'Identifique as peças que faltam na banca'}
+                      {liberadoParaFechar ? (
+                        <>
+                          <CheckCircle2 size={18} /> Confirmar e Atualizar Vendas
+                        </>
+                      ) : (
+                        'Identifique as peças vendidas'
+                      )}
                     </button>
                   </div>
 

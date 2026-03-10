@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import toast from 'react-hot-toast';
-import { X, Settings, Plus, ChevronDown, ChevronRight, Pencil, Trash2, Zap, Save } from 'lucide-react';
+import { X, Settings, Plus, ChevronDown, ChevronRight, Pencil, Trash2, Zap, Save, Search, Edit3 } from 'lucide-react'; // ✨ Ícones atualizados
 
 import ModalVariacoesRapidas from './ModalVariacoesRapidas';
 import ModalEdicaoMassa from './ModalEdicaoMassa';
@@ -20,9 +20,8 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   const [modalVariacaoRapidaAberto, setModalVariacaoRapidaAberto] = useState(false);
   const [produtoRapidoSelecionado, setProdutoRapidoSelecionado] = useState(null);
 
-  // ✨ ESTADOS PARA A EDIÇÃO RÁPIDA ("MODO PLANILHA") ✨
-  const [modoAjusteRapido, setModoAjusteRapido] = useState(null); // Guarda o NOME do modelo que está sendo ajustado
-  const [valoresAjuste, setValoresAjuste] = useState({}); // Guarda os valores digitados { id_produto: { banca: 10, saco: 5 } }
+  const [modoAjusteRapido, setModoAjusteRapido] = useState(null); 
+  const [valoresAjuste, setValoresAjuste] = useState({}); 
 
   if (!aberto) return null;
 
@@ -42,7 +41,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   };
 
   const toggleSanfona = (nomeProduto) => {
-    // Se fechar a sanfona, cancela o modo de ajuste se estiver ativo nele
     if (expandidos[nomeProduto] && modoAjusteRapido === nomeProduto) {
       setModoAjusteRapido(null);
     }
@@ -67,7 +65,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     }
   };
 
-  // ✨ FUNÇÕES DO MODO AJUSTE RÁPIDO ✨
   const iniciarAjusteRapido = (nomeProduto, variacoes) => {
     const valoresIniciais = {};
     variacoes.forEach(v => {
@@ -78,14 +75,14 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     });
     setValoresAjuste(valoresIniciais);
     setModoAjusteRapido(nomeProduto);
-    setExpandidos(prev => ({ ...prev, [nomeProduto]: true })); // Garante que a sanfona abra
+    setExpandidos(prev => ({ ...prev, [nomeProduto]: true })); 
   };
 
   const handleValorAjuste = (id, campo, valor) => {
     const numero = parseInt(valor) || 0;
     setValoresAjuste(prev => ({
       ...prev,
-      [id]: { ...prev[id], [campo]: numero < 0 ? 0 : numero } // Não deixa ficar negativo
+      [id]: { ...prev[id], [campo]: numero < 0 ? 0 : numero } 
     }));
   };
 
@@ -94,7 +91,6 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     try {
       for (const variacao of variacoes) {
         const novosValores = valoresAjuste[variacao.id];
-        // Só faz o update se os valores mudaram de verdade, pra economizar requisição
         if (novosValores && (novosValores.banca !== variacao.estoque_banca || novosValores.saco !== variacao.estoque_saco)) {
           await supabase
             .from('produtos')
@@ -116,34 +112,51 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
 
   return (
     <div className="fixed inset-0 bg-slate-900/80 z-50 flex justify-end animate-fade-in backdrop-blur-sm" onClick={fechar}>
-      <div className="bg-slate-50 w-full md:w-[600px] h-full shadow-2xl flex flex-col animate-slide-left" onClick={e => e.stopPropagation()}>
+      <div className="bg-slate-50 w-full md:w-[600px] h-full shadow-2xl flex flex-col animate-slide-left border-l border-slate-700/30" onClick={e => e.stopPropagation()}>
         
+        {/* ✨ HEADER PREMIUM ✨ */}
         <div className="bg-slate-900 text-white p-5 flex justify-between items-center shadow-md z-10 shrink-0">
-          <h2 className="text-xl font-black flex items-center gap-2">
-            <Settings className="text-blue-500" size={24} /> Gerenciar Produtos
-          </h2>
+          <div>
+            <h2 className="text-xl font-black flex items-center gap-2 tracking-tight">
+              <Settings className="text-blue-500" size={22} /> Gerenciar Produtos
+            </h2>
+            <p className="text-[10px] text-slate-400 font-bold mt-0.5 uppercase tracking-widest">Catálogo e Estoque Base</p>
+          </div>
           <button onClick={fechar} className="text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
             <X size={20} strokeWidth={3} />
           </button>
         </div>
 
-        <div className="p-4 border-b border-slate-200 bg-white shrink-0">
-          <input 
-            type="text" placeholder="Buscar modelo..." 
-            className="w-full p-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 outline-none font-bold uppercase transition-all shadow-sm"
-            value={busca} onChange={e => setBusca(e.target.value)}
-          />
+        {/* ✨ ÁREA DE CONTROLE (BUSCA E NOVO MODELO) ✨ */}
+        <div className="p-4 border-b border-slate-200 bg-white shrink-0 space-y-3">
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <Search size={18} className="text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+            </div>
+            <input 
+              type="text" 
+              placeholder="Buscar modelo..." 
+              className="w-full pl-10 pr-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 outline-none text-sm font-bold text-slate-700 uppercase tracking-wide transition-all shadow-sm"
+              value={busca} 
+              onChange={e => setBusca(e.target.value)}
+            />
+          </div>
+          
           <button 
             onClick={() => { setProdutoEditando(null); setModalPassosAberto(true); }} 
-            className="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-black py-3.5 rounded-xl shadow-md shadow-blue-500/30 active:scale-95 transition-all uppercase tracking-wider flex items-center justify-center gap-2"
+            className="w-full bg-slate-900 hover:bg-black text-white font-black py-3.5 rounded-xl shadow-lg shadow-slate-900/20 active:scale-95 transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2"
           >
-            <Plus size={20} strokeWidth={3} /> Cadastrar Novo Modelo
+            <Plus size={18} strokeWidth={3} className="text-blue-400" /> Cadastrar Novo Modelo
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20 custom-scrollbar">
+        {/* ✨ LISTA DE MODELOS ✨ */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24 custom-scrollbar">
           {modelosFiltrados.length === 0 ? (
-            <p className="text-center text-slate-400 font-bold mt-10">Nenhum produto encontrado.</p>
+            <div className="text-center mt-12 bg-white p-10 rounded-3xl border border-dashed border-slate-300">
+              <Search size={40} className="text-slate-300 mx-auto mb-3" strokeWidth={1.5} />
+              <p className="text-slate-500 font-black text-base uppercase tracking-tight">Nenhum modelo achado</p>
+            </div>
           ) : (
             modelosFiltrados.map(nome => {
               const variacoes = produtos.filter(p => p.nome === nome);
@@ -152,81 +165,105 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
               const emAjuste = modoAjusteRapido === nome;
               
               return (
-                <div key={nome} className={`bg-white rounded-2xl shadow-sm border overflow-hidden transition-all duration-300 ${emAjuste ? 'border-amber-400 ring-2 ring-amber-100' : 'border-slate-200 hover:border-slate-300'}`}>
+                <div key={nome} className={`bg-white rounded-2xl shadow-sm border overflow-hidden transition-all duration-300 ${emAjuste ? 'border-amber-300 shadow-amber-500/10 ring-2 ring-amber-50' : 'border-slate-200 hover:border-slate-300'}`}>
                   
-                  <div className={`p-3 md:p-4 flex flex-col md:flex-row md:justify-between md:items-center gap-3 border-b transition-colors ${emAjuste ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
+                  {/* CABEÇALHO DO MODELO */}
+                  <div className={`p-3 md:p-4 flex flex-col md:flex-row md:justify-between md:items-center gap-3 border-b transition-colors ${emAjuste ? 'bg-amber-50/50 border-amber-100' : 'bg-slate-50/50 border-slate-100'}`}>
+                    
                     <div 
                       onClick={() => !emAjuste && toggleSanfona(nome)}
                       className={`flex items-center gap-2 select-none flex-1 ${!emAjuste && 'cursor-pointer group'}`}
                     >
                       <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${emAjuste ? 'text-amber-500' : 'text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-600'}`}>
-                        {estaExpandido ? <ChevronDown size={16} strokeWidth={3} /> : <ChevronRight size={16} strokeWidth={3} />}
+                        {estaExpandido ? <ChevronDown size={18} strokeWidth={3} /> : <ChevronRight size={18} strokeWidth={3} />}
                       </div>
-                      <h3 className={`font-black uppercase tracking-tight truncate flex-1 ${emAjuste ? 'text-amber-700' : 'text-slate-800'}`}>{nome}</h3>
+                      <h3 className={`font-black uppercase tracking-tight truncate flex-1 ${emAjuste ? 'text-amber-800' : 'text-slate-800'}`}>{nome}</h3>
                     </div>
 
-                    <div className="flex items-center gap-2 pl-8 md:pl-0">
-                      <span className="text-[10px] md:text-xs font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1.5 rounded-lg shadow-sm whitespace-nowrap">Tot: {estoqueTotal} un.</span>
+                    <div className="flex items-center gap-1.5 md:gap-2 pl-8 md:pl-0 flex-wrap">
+                      <span className="text-[10px] font-black text-slate-500 bg-slate-100 border border-slate-200 px-2 py-1.5 rounded-lg uppercase tracking-widest whitespace-nowrap">
+                        {estoqueTotal} un.
+                      </span>
                       
-                      {/* ✨ BOTÃO DE ATIVAR O MODO PLANILHA ✨ */}
                       {!emAjuste ? (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); iniciarAjusteRapido(nome, variacoes); }} 
-                          className="flex items-center gap-1 text-[10px] md:text-xs font-black bg-slate-800 text-white px-2.5 py-1.5 rounded-lg active:scale-95 shadow-sm uppercase hover:bg-black transition-colors"
-                          title="Ajuste Rápido de Estoque"
-                        >
-                          <Zap size={14} className="text-amber-400" /> Ajuste Rápido
-                        </button>
+                        <>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); iniciarAjusteRapido(nome, variacoes); }} 
+                            className="flex items-center gap-1 text-[9px] md:text-[10px] font-black bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1.5 rounded-lg active:scale-95 uppercase tracking-widest hover:bg-amber-100 transition-colors shadow-sm"
+                            title="Ajuste Rápido de Estoque"
+                          >
+                            <Zap size={12} className="fill-amber-600" /> <span className="hidden md:inline">Ajuste Rápido</span>
+                          </button>
+                          
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setProdutoRapidoSelecionado(variacoes[0]); setModalVariacaoRapidaAberto(true); }} 
+                            className="flex items-center gap-1 text-[9px] md:text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1.5 rounded-lg active:scale-95 uppercase tracking-widest hover:bg-emerald-100 transition-colors shadow-sm" 
+                            title="Adicionar Cor/Tamanho"
+                          >
+                            <Plus size={12} strokeWidth={3} /> <span className="hidden md:inline">Cor/Tam</span>
+                          </button>
+                          
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); setProdutoMassaSelecionado(variacoes[0]); setModalEdicaoMassaAberto(true); }} 
+                            className="w-7 h-7 bg-white hover:bg-blue-50 text-slate-400 hover:text-blue-600 border border-slate-200 hover:border-blue-200 rounded-lg flex items-center justify-center shadow-sm active:scale-95 transition-colors" 
+                            title="Editar Preços e Dados"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); excluirProdutoMassa(nome); }} 
+                            className="w-7 h-7 bg-white hover:bg-red-50 text-slate-400 hover:text-red-600 border border-slate-200 hover:border-red-200 rounded-lg flex items-center justify-center shadow-sm active:scale-95 transition-colors" 
+                            title="Excluir Modelo Inteiro"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
                       ) : (
                         <button 
                           onClick={() => setModoAjusteRapido(null)} 
-                          className="text-[10px] md:text-xs font-black bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-lg active:scale-95 uppercase hover:bg-slate-300 transition-colors"
+                          className="text-[10px] font-black bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100 px-3 py-1.5 rounded-lg active:scale-95 uppercase tracking-widest transition-colors shadow-sm"
                         >
                           Cancelar
                         </button>
                       )}
-                      
-                      {!emAjuste && (
-                        <>
-                          <button onClick={(e) => { e.stopPropagation(); setProdutoRapidoSelecionado(variacoes[0]); setModalVariacaoRapidaAberto(true); }} className="w-8 h-8 md:w-auto md:px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 rounded-lg flex items-center justify-center shadow-sm active:scale-95 transition-colors text-xs font-black uppercase gap-1" title="Adicionar Cor/Tamanho">
-                            <Plus size={14} strokeWidth={3} /> <span className="hidden md:inline">Cor/Tam</span>
-                          </button>
-                          
-                          <button onClick={(e) => { e.stopPropagation(); setProdutoMassaSelecionado(variacoes[0]); setModalEdicaoMassaAberto(true); }} className="w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100 rounded-lg flex items-center justify-center shadow-sm active:scale-95 transition-colors" title="Editar Preços e Dados do Modelo"><Pencil size={14} /></button>
-                          <button onClick={(e) => { e.stopPropagation(); excluirProdutoMassa(nome); }} className="w-8 h-8 bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 rounded-lg flex items-center justify-center shadow-sm active:scale-95 transition-colors" title="Excluir Modelo Inteiro"><Trash2 size={14} /></button>
-                        </>
-                      )}
                     </div>
                   </div>
                   
+                  {/* LISTA DE VARIAÇÕES (CORES E TAMANHOS) */}
                   {estaExpandido && (
-                    <div className="divide-y divide-slate-50 animate-fade-in bg-white">
+                    <div className="divide-y divide-slate-100 animate-fade-in bg-white">
                       {variacoes.sort(sortLogico).map(v => (
                         <div key={v.id} className={`p-3 md:p-4 flex justify-between items-center transition-colors ${emAjuste ? 'hover:bg-amber-50/30' : 'hover:bg-slate-50'}`}>
+                          
                           <div>
-                            <p className="font-bold text-slate-700 text-sm">Tam: <span className="text-blue-600 font-black">{v.tam}</span> <span className="text-slate-300 font-normal mx-1">|</span> {v.cor}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">Saco: <span className="font-bold">{v.saco || '-'}</span></p>
+                            <p className="font-bold text-slate-800 text-xs md:text-sm uppercase tracking-tight">
+                              <span className="text-blue-600 font-black">{v.tam}</span> <span className="text-slate-300 font-normal mx-1">|</span> {v.cor}
+                            </p>
+                            <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-bold">
+                              No Saco: <span className="text-slate-600">{v.estoque_saco || 0}</span>
+                            </p>
                           </div>
                           
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-3 md:gap-4">
                             
-                            {/* ✨ MODO PLANILHA (INPUTS) VS MODO NORMAL (TEXTOS) ✨ */}
+                            {/* ✨ MODO PLANILHA VS MODO NORMAL ✨ */}
                             {emAjuste ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 bg-amber-50 p-1.5 rounded-xl border border-amber-100">
                                 <div className="text-center">
-                                  <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Banca</label>
+                                  <label className="text-[8px] font-black text-amber-700 uppercase tracking-widest block mb-0.5">Banca</label>
                                   <input 
-                                    type="number" min="0" 
-                                    className="w-14 p-1.5 border-2 border-amber-200 rounded-md text-center font-black text-sm text-slate-800 outline-none focus:border-amber-500 bg-amber-50"
+                                    type="number" min="0" onWheel={(e) => e.target.blur()}
+                                    className="w-12 py-1 border border-amber-200 rounded-lg text-center font-black text-xs text-amber-950 outline-none focus:border-amber-500 bg-white shadow-inner"
                                     value={valoresAjuste[v.id]?.banca ?? 0}
                                     onChange={(e) => handleValorAjuste(v.id, 'banca', e.target.value)}
                                   />
                                 </div>
                                 <div className="text-center">
-                                  <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Saco</label>
+                                  <label className="text-[8px] font-black text-amber-700 uppercase tracking-widest block mb-0.5">Saco</label>
                                   <input 
-                                    type="number" min="0" 
-                                    className="w-14 p-1.5 border-2 border-amber-200 rounded-md text-center font-black text-sm text-slate-800 outline-none focus:border-amber-500 bg-amber-50"
+                                    type="number" min="0" onWheel={(e) => e.target.blur()}
+                                    className="w-12 py-1 border border-amber-200 rounded-lg text-center font-black text-xs text-amber-950 outline-none focus:border-amber-500 bg-white shadow-inner"
                                     value={valoresAjuste[v.id]?.saco ?? 0}
                                     onChange={(e) => handleValorAjuste(v.id, 'saco', e.target.value)}
                                   />
@@ -235,12 +272,12 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                             ) : (
                               <>
                                 <div className="text-right hidden sm:block">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Banca / Saco</p>
-                                  <p className="font-black text-slate-700 text-sm">{v.estoque_banca || 0} / {v.estoque_saco || 0}</p>
+                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Banca / Saco</p>
+                                  <p className="font-black text-slate-700 text-sm mt-0.5">{v.estoque_banca || 0} <span className="text-slate-300 font-normal">/</span> {v.estoque_saco || 0}</p>
                                 </div>
                                 <div className="flex gap-1.5">
-                                  <button onClick={() => { setProdutoEditando(v); setModalPassosAberto(true); }} className="w-8 h-8 bg-white hover:bg-blue-50 text-blue-500 rounded-lg flex items-center justify-center active:scale-95 border border-slate-200 hover:border-blue-200 transition-colors shadow-sm"><Pencil size={14}/></button>
-                                  <button onClick={() => excluirVariacao(v.id)} className="w-8 h-8 bg-white hover:bg-red-50 text-red-500 rounded-lg flex items-center justify-center active:scale-95 border border-slate-200 hover:border-red-200 transition-colors shadow-sm"><Trash2 size={14}/></button>
+                                  <button onClick={() => { setProdutoEditando(v); setModalPassosAberto(true); }} className="w-8 h-8 bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-500 rounded-lg flex items-center justify-center active:scale-95 transition-colors"><Pencil size={14}/></button>
+                                  <button onClick={() => excluirVariacao(v.id)} className="w-8 h-8 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg flex items-center justify-center active:scale-95 transition-colors"><Trash2 size={14}/></button>
                                 </div>
                               </>
                             )}
@@ -251,12 +288,12 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
 
                       {/* ✨ BOTÃO GIGANTE PARA SALVAR O AJUSTE RÁPIDO ✨ */}
                       {emAjuste && (
-                        <div className="p-3 bg-amber-50 border-t border-amber-100 flex justify-end">
+                        <div className="p-4 bg-amber-50/50 border-t border-amber-100 flex justify-end">
                           <button 
                             onClick={() => salvarAjusteEmMassa(variacoes)}
-                            className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white font-black px-6 py-3 rounded-xl shadow-md active:scale-95 transition-all uppercase tracking-widest flex items-center justify-center gap-2"
+                            className="w-full bg-amber-500 hover:bg-amber-600 text-amber-950 font-black px-6 py-3.5 rounded-xl shadow-md shadow-amber-500/20 active:scale-95 transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2"
                           >
-                            <Save size={18} /> Salvar Estoque do Modelo
+                            <Save size={16} /> Confirmar Ajuste de Estoque
                           </button>
                         </div>
                       )}

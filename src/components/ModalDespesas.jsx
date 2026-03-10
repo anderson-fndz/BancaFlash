@@ -76,7 +76,7 @@ export default function ModalDespesas({ aberto, fechar }) {
         {/* HEADER */}
         <div className="bg-red-600 text-white p-5 flex justify-between items-center shadow-md z-10 shrink-0">
           <div>
-            <h2 className="text-xl font-black italic flex items-center gap-2">💸 Saídas e Sangrias</h2>
+            <h2 className="text-xl font-black italic flex items-center gap-2">💸 Saí e Sangrias</h2>
             <p className="text-red-200 text-xs font-bold mt-1 uppercase tracking-widest">Registre os gastos do dia</p>
           </div>
           <button onClick={fechar} className="bg-red-700 hover:bg-red-800 w-10 h-10 rounded-full flex items-center justify-center font-black text-red-100 active:scale-95 transition-colors">X</button>
