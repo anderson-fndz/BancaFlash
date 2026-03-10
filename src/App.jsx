@@ -16,8 +16,8 @@ import ModalConciliacao from './components/ModalConciliacao';
 import DashboardBI from './components/DashboardBI';
 import TelaFinanceiro from './components/TelaFinanceiro';
 import Perfil from './components/Perfil';
-// ✨ IMPORT DA NOVA TELA AQUI
 import TelaRankings from './components/TelaRankings'; 
+import TelaHistoricoVendas from './components/TelaHistoricoVendas';
 
 export default function App() {
   const [sessao, setSessao] = useState(null);
@@ -221,13 +221,14 @@ export default function App() {
         <Header setMenuMobileAberto={setMenuMobileAberto} setTelaAtiva={setTelaAtiva} />        
         
         <main className="flex-1 overflow-y-auto relative bg-slate-50">
-          {/* ✨ ROTEAMENTO DA NOVA TELA AQUI ✨ */}
           {telaAtiva === 'PDV' ? (
             <Vitrine produtos={produtos} setProdutoAberto={setProdutoAberto} />
           ) : telaAtiva === 'BI' ? (
             <DashboardBI />
           ) : telaAtiva === 'RANKING' ? (
             <TelaRankings />
+          ) : telaAtiva === 'HISTORICO' ? (
+            <TelaHistoricoVendas />
           ) : telaAtiva === 'FINANCEIRO' ? (
             <TelaFinanceiro />
           ) : telaAtiva === 'PERFIL' ? (

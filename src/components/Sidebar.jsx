@@ -10,7 +10,8 @@ import {
   ClipboardCheck,
   Zap,
   X,
-  Trophy
+  Trophy,
+  CalendarRange // ✨ ÍCONE NOVO DO HISTÓRICO
 } from 'lucide-react';
 
 export default function Sidebar({ 
@@ -25,10 +26,12 @@ export default function Sidebar({
   setMenuMobileAberto 
 }) {
   
+  // ✨ BOTÃO DO HISTÓRICO ADICIONADO AQUI
   const menuPrincipal = [
     { id: 'PDV', nome: 'Ponto de Venda', icone: ShoppingCart },
     { id: 'BI', nome: 'Dashboard (BI)', icone: BarChart3 },
     { id: 'RANKING', nome: 'Ranking de Vendas', icone: Trophy },
+    { id: 'HISTORICO', nome: 'Histórico de Vendas', icone: CalendarRange },
     { id: 'FINANCEIRO', nome: 'Financeiro', icone: CircleDollarSign }
   ];
 
@@ -47,7 +50,6 @@ export default function Sidebar({
         ${menuMobileAberto ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         
-        {/* LOGO AREA - Ajustado para Mobile */}
         <div className="h-14 md:h-16 flex items-center justify-between px-4 md:px-6 border-b border-gray-800/50 shrink-0 bg-[#0B0F19] gap-2">
           <div 
             onClick={() => { setTelaAtiva('PDV'); setMenuMobileAberto(false); }}
