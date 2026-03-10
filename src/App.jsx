@@ -16,6 +16,8 @@ import ModalConciliacao from './components/ModalConciliacao';
 import DashboardBI from './components/DashboardBI';
 import TelaFinanceiro from './components/TelaFinanceiro';
 import Perfil from './components/Perfil';
+// ✨ IMPORT DA NOVA TELA AQUI
+import TelaRankings from './components/TelaRankings'; 
 
 export default function App() {
   const [sessao, setSessao] = useState(null);
@@ -70,7 +72,6 @@ export default function App() {
     setCarregando(false);
   };
 
-  // ✨ FUNÇÃO ATUALIZADA: Recebe a direção da transferência ✨
   const transferirParaBanca = async (transferencias, direcao = 'SACO_PARA_BANCA') => {
     const idsTransf = Object.keys(transferencias);
     if (idsTransf.length === 0) return;
@@ -86,12 +87,11 @@ export default function App() {
           let novaBanca, novoSaco;
           
           if (direcao === 'SACO_PARA_BANCA') {
-            if (produto.estoque_saco < qtd) continue; // Trava de segurança
+            if (produto.estoque_saco < qtd) continue; 
             novaBanca = (produto.estoque_banca || 0) + qtd;
             novoSaco = (produto.estoque_saco || 0) - qtd;
           } else {
-            // BANCA_PARA_SACO
-            if (produto.estoque_banca < qtd) continue; // Trava de segurança
+            if (produto.estoque_banca < qtd) continue; 
             novaBanca = (produto.estoque_banca || 0) - qtd;
             novoSaco = (produto.estoque_saco || 0) + qtd;
           }
@@ -217,15 +217,17 @@ export default function App() {
         menuMobileAberto={menuMobileAberto} setMenuMobileAberto={setMenuMobileAberto}
       />
 
-      {/* ✨ CORREÇÃO AQUI: Removido o pt-14 do mobile ✨ */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         <Header setMenuMobileAberto={setMenuMobileAberto} setTelaAtiva={setTelaAtiva} />        
         
         <main className="flex-1 overflow-y-auto relative bg-slate-50">
+          {/* ✨ ROTEAMENTO DA NOVA TELA AQUI ✨ */}
           {telaAtiva === 'PDV' ? (
             <Vitrine produtos={produtos} setProdutoAberto={setProdutoAberto} />
           ) : telaAtiva === 'BI' ? (
             <DashboardBI />
+          ) : telaAtiva === 'RANKING' ? (
+            <TelaRankings />
           ) : telaAtiva === 'FINANCEIRO' ? (
             <TelaFinanceiro />
           ) : telaAtiva === 'PERFIL' ? (
