@@ -117,7 +117,7 @@ export default function Sidebar({
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/30 transition-all active:scale-95"
               >
                 <PackagePlus size={20} className="text-emerald-500" strokeWidth={2.5} />
-                <span className="text-sm">Reposição (Entrada)</span>
+                <span className="text-sm">Entrada de Mercadoria</span>
               </button>
               
               <button
