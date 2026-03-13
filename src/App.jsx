@@ -18,6 +18,7 @@ import TelaFinanceiro from './components/TelaFinanceiro';
 import Perfil from './components/Perfil';
 import TelaRankings from './components/TelaRankings'; 
 import TelaHistoricoVendas from './components/TelaHistoricoVendas';
+import TelaReposicao from './components/TelaReposicao'; // ✨ NOVO IMPORT DA TELA AQUI ✨
 
 export default function App() {
   const [sessao, setSessao] = useState(null);
@@ -233,6 +234,8 @@ export default function App() {
             <TelaFinanceiro />
           ) : telaAtiva === 'PERFIL' ? (
             <Perfil />
+          ) : telaAtiva === 'reposicao' ? ( // ✨ TELA NOVA RENDERIZADA AQUI ✨
+            <TelaReposicao />
           ) : null}
         </main>
 
