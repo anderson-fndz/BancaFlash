@@ -4,12 +4,15 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import { TrendingUp, Banknote, ShoppingBag, PieChart, Activity, CalendarDays, Zap, Calendar, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
 
 export default function DashboardBI() {
-  // ✨ NOVO ESTADO DE FILTRO INTELIGENTE ✨
-  const [filtro, setFiltro] = useState({ tipo: 'hoje', mes: new Date().getMonth(), ano: new Date().getFullYear() }); 
-  
+  const hojeGlobal = new Date();
+  const mesAtualReal = hojeGlobal.getMonth();
+  const anoAtualReal = hojeGlobal.getFullYear();
+
+  // ✨ ESTADOS ORIGINAIS MANTIDOS ✨
+  const [filtro, setFiltro] = useState({ tipo: 'hoje', mes: mesAtualReal, ano: anoAtualReal }); 
   const [menuDatasAberto, setMenuDatasAberto] = useState(false);
-  const [abaSuspensa, setAbaSuspensa] = useState('hoje'); // Controla qual aba está aparecendo no lado direito do menu
-  const [anoNavegacao, setAnoNavegacao] = useState(new Date().getFullYear()); // Controla o ano na tela de seleção de meses
+  const [abaSuspensa, setAbaSuspensa] = useState('hoje'); 
+  const [anoNavegacao, setAnoNavegacao] = useState(anoAtualReal);
 
   const [carregando, setCarregando] = useState(false);
   const [kpis, setKpis] = useState({ faturamento: 0, pecas: 0, ticketMedio: 0, totalPedidos: 0, lucroBruto: 0, despesas: 0, lucroLiquido: 0 });
@@ -27,7 +30,14 @@ export default function DashboardBI() {
 
   const mesesExtenso = ['Jan.', 'Fev.', 'Mar.', 'Abr.', 'Maio', 'Jun.', 'Jul.', 'Ago.', 'Set.', 'Out.', 'Nov.', 'Dez.'];
 
-  // ✨ NOVA LÓGICA DE DATAS ADAPTADA PRO NOVO FILTRO ✨
+  // ✨ LÓGICA DE BLOQUEIO SHOPEE ✨
+  const isFuturo = (mesIndex, ano) => {
+    if (ano > anoAtualReal) return true;
+    if (ano === anoAtualReal && mesIndex > mesAtualReal) return true;
+    return false;
+  };
+
+  // ✨ LÓGICA DE DATAS (ORIGINAL) ✨
   const getRangeDatas = () => {
     const hoje = new Date();
     let inicio = new Date();
@@ -96,6 +106,7 @@ export default function DashboardBI() {
     setCarregando(false);
   };
 
+  // ✨ LÓGICA DE PROCESSAMENTO (COMPLETA RESTAURADA) ✨
   const processarDados = (vendas, despesas, produtosBase) => {
     const { inicio, fim } = getRangeDatas();
 
@@ -119,7 +130,6 @@ export default function DashboardBI() {
     setKpis({ faturamento, pecas: totalPecas, ticketMedio, totalPedidos: pedidosUnicos, lucroBruto, despesas: totalDespesas, lucroLiquido });
 
     let baseLinha = {};
-    
     if (filtro.tipo === 'hoje' || filtro.tipo === 'ontem') {
       for(let i = 0; i <= 23; i++) {
         let h = i.toString().padStart(2, '0') + 'h';
@@ -201,7 +211,6 @@ export default function DashboardBI() {
 
   const maxEixoY = dadosGraficoLinha.length > 0 ? Math.max(...dadosGraficoLinha.map(d => d.Faturamento)) * 1.1 : 'auto';
 
-  // GERADOR DE LABEL DINÂMICA
   const gerarLabelFiltro = () => {
     switch (filtro.tipo) {
       case 'hoje': return 'Hoje (Tempo Real)';
@@ -214,33 +223,12 @@ export default function DashboardBI() {
     }
   };
 
-  const abrirMenu = () => {
-    setAbaSuspensa(filtro.tipo === 'mes' || filtro.tipo === 'ano' ? filtro.tipo : 'hoje');
-    setAnoNavegacao(filtro.ano || new Date().getFullYear());
-    setMenuDatasAberto(true);
-  };
-
-  const aplicarFiltroRapido = (tipo) => {
-    setFiltro({ tipo, mes: new Date().getMonth(), ano: new Date().getFullYear() });
-    setMenuDatasAberto(false);
-  };
-
-  const aplicarFiltroMes = (indiceMes) => {
-    setFiltro({ tipo: 'mes', mes: indiceMes, ano: anoNavegacao });
-    setMenuDatasAberto(false);
-  };
-
-  const aplicarFiltroAno = (anoSelecionado) => {
-    setFiltro({ tipo: 'ano', mes: 0, ano: anoSelecionado });
-    setMenuDatasAberto(false);
-  };
-
-  const anosDisponiveis = [new Date().getFullYear() - 2, new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1];
+  const anosDisponiveis = [anoAtualReal - 1, anoAtualReal, anoAtualReal + 1];
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-8 animate-fade-in pb-24 md:pb-8 space-y-6">
       
-      {/* ✨ HEADER COM O MENU DROPDOWN TIPO SHOPEE ✨ */}
+      {/* ✨ HEADER COM MENU SHOPEE ✨ */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm relative">
         <div>
           <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
@@ -251,156 +239,110 @@ export default function DashboardBI() {
           </p>
         </div>
         
-        {/* DROPDOWN MASTER */}
         <div className="relative">
-          <div className="flex flex-col items-start md:items-end">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Período dos Dados</span>
-            <button 
-              onClick={abrirMenu}
-              className="flex items-center justify-between gap-4 w-full md:w-64 bg-slate-50 border border-slate-200 hover:border-blue-400 px-4 py-3 rounded-xl shadow-sm transition-all active:scale-95 group"
-            >
-              <div className="flex items-center gap-2.5">
-                <Calendar size={16} className="text-blue-600" />
-                <span className="text-xs md:text-sm font-black text-slate-800">{gerarLabelFiltro()}</span>
-              </div>
-              <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${menuDatasAberto ? 'rotate-180 text-blue-500' : 'group-hover:text-blue-500'}`} />
-            </button>
-          </div>
+          <button 
+            onClick={() => setMenuDatasAberto(!menuDatasAberto)}
+            className="flex items-center justify-between gap-4 w-full md:w-64 bg-slate-50 border border-slate-200 hover:border-blue-400 px-4 py-3 rounded-xl shadow-sm transition-all font-black text-slate-800 text-sm"
+          >
+            <div className="flex items-center gap-2.5">
+              <Calendar size={16} className="text-blue-600" />
+              <span>{gerarLabelFiltro()}</span>
+            </div>
+            <ChevronDown size={16} className={`transition-transform ${menuDatasAberto ? 'rotate-180' : ''}`} />
+          </button>
 
           {menuDatasAberto && (
-            <>
-              {/* Overlay invisível para fechar ao clicar fora */}
-              <div className="fixed inset-0 z-40" onClick={() => setMenuDatasAberto(false)}></div>
-              
-              {/* O Painel Duplo estilo Shopee */}
-              <div className="absolute right-0 mt-2 w-[320px] md:w-[480px] bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 overflow-hidden animate-slide-up flex flex-col md:flex-row">
-                
-                {/* Lado Esquerdo: Menu Lateral */}
-                <div className="w-full md:w-1/3 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-100 py-2 flex flex-row md:flex-col overflow-x-auto md:overflow-visible">
-                  
-                  <div className="px-3 py-2 hidden md:block"><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Rápidos</span></div>
-                  
-                  {['hoje', 'ontem', '7dias', '30dias'].map(tipo => {
-                    const labels = { 'hoje': 'Tempo Real', 'ontem': 'Ontem', '7dias': 'Últimos 7 Dias', '30dias': 'Últimos 30 Dias' };
-                    const isActive = filtro.tipo === tipo;
-                    return (
-                      <button 
-                        key={tipo}
-                        onMouseEnter={() => setAbaSuspensa(tipo)}
-                        onClick={() => aplicarFiltroRapido(tipo)}
-                        className={`w-full text-left px-4 py-2.5 text-xs font-bold transition-colors whitespace-nowrap md:whitespace-normal
-                          ${isActive ? 'text-blue-600 bg-blue-50/50 border-r-2 border-blue-500' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border-r-2 border-transparent'}`}
-                      >
-                        {labels[tipo]}
-                      </button>
-                    )
-                  })}
-
-                  <div className="w-full h-px bg-slate-200 my-2 hidden md:block"></div>
-                  
-                  <button 
-                    onMouseEnter={() => setAbaSuspensa('mes')}
-                    onClick={() => setAbaSuspensa('mes')}
-                    className={`w-full flex justify-between items-center px-4 py-2.5 text-xs font-bold transition-colors whitespace-nowrap md:whitespace-normal
-                      ${abaSuspensa === 'mes' ? 'text-blue-600 bg-blue-50/50 border-r-2 border-blue-500' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border-r-2 border-transparent'}`}
-                  >
-                    Por Mês <ChevronRight size={14} className="hidden md:block opacity-50" />
+            <div className="absolute right-0 mt-2 w-full md:w-[480px] bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 overflow-hidden flex flex-col md:flex-row animate-slide-up">
+              {/* Menu Lateral */}
+              <div className="w-full md:w-1/3 bg-slate-50 border-r border-slate-100 py-2 flex flex-col">
+                {['hoje', 'ontem', '7dias', '30dias'].map(t => (
+                  <button key={t} onClick={() => {setFiltro({tipo: t, mes: mesAtualReal, ano: anoAtualReal}); setMenuDatasAberto(false)}} className={`px-4 py-2.5 text-xs font-bold text-left ${filtro.tipo === t ? 'text-blue-600 bg-blue-50 border-r-2 border-blue-500' : 'text-slate-600 hover:bg-slate-100'}`}>
+                    {t === 'hoje' ? 'Tempo Real' : t === 'ontem' ? 'Ontem' : t === '7dias' ? '7 Dias' : '30 Dias'}
                   </button>
-
-                  <button 
-                    onMouseEnter={() => setAbaSuspensa('ano')}
-                    onClick={() => setAbaSuspensa('ano')}
-                    className={`w-full flex justify-between items-center px-4 py-2.5 text-xs font-bold transition-colors whitespace-nowrap md:whitespace-normal
-                      ${abaSuspensa === 'ano' ? 'text-blue-600 bg-blue-50/50 border-r-2 border-blue-500' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border-r-2 border-transparent'}`}
-                  >
-                    Por Ano <ChevronRight size={14} className="hidden md:block opacity-50" />
-                  </button>
-                </div>
-
-                {/* Lado Direito: Conteúdo Dinâmico */}
-                <div className="w-full md:w-2/3 p-5 bg-white min-h-[200px]">
-                  
-                  {['hoje', 'ontem', '7dias', '30dias'].includes(abaSuspensa) && (
-                    <div className="h-full flex flex-col justify-center items-center text-center space-y-3 animate-fade-in text-slate-400">
-                      <CalendarDays size={40} strokeWidth={1} className="opacity-50" />
-                      <p className="text-sm font-bold">Clique para aplicar o filtro<br/><span className="text-blue-600">{abaSuspensa === 'hoje' ? 'Tempo Real' : abaSuspensa === 'ontem' ? 'Ontem' : abaSuspensa.replace('dias', ' Dias')}</span></p>
-                    </div>
-                  )}
-
-                  {abaSuspensa === 'mes' && (
-                    <div className="animate-fade-in h-full flex flex-col">
-                      <div className="flex justify-between items-center mb-4">
-                        <button onClick={() => setAnoNavegacao(prev => prev - 1)} className="p-1 hover:bg-slate-100 rounded text-slate-500 transition-colors"><ChevronLeft size={18} /></button>
-                        <span className="font-black text-slate-800">{anoNavegacao}</span>
-                        <button onClick={() => setAnoNavegacao(prev => prev + 1)} className="p-1 hover:bg-slate-100 rounded text-slate-500 transition-colors"><ChevronRight size={18} /></button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {mesesExtenso.map((m, idx) => {
-                          const isSelected = filtro.tipo === 'mes' && filtro.mes === idx && filtro.ano === anoNavegacao;
-                          return (
-                            <button 
-                              key={m} 
-                              onClick={() => aplicarFiltroMes(idx)}
-                              className={`py-3 text-xs font-bold rounded-lg transition-all border ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : 'bg-slate-50 border-slate-100 text-slate-600 hover:border-blue-300 hover:bg-white'}`}
-                            >
-                              {m}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {abaSuspensa === 'ano' && (
-                    <div className="animate-fade-in h-full flex flex-col justify-center">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-4">Selecione o Ano</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        {anosDisponiveis.map(ano => {
-                          const isSelected = filtro.tipo === 'ano' && filtro.ano === ano;
-                          return (
-                            <button 
-                              key={ano} 
-                              onClick={() => aplicarFiltroAno(ano)}
-                              className={`py-4 text-sm font-black rounded-xl transition-all border ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : 'bg-slate-50 border-slate-100 text-slate-600 hover:border-blue-300 hover:bg-white'}`}
-                            >
-                              {ano}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                </div>
+                ))}
+                <div className="h-px bg-slate-200 my-2" />
+                <button onMouseEnter={() => setAbaSuspensa('mes')} className={`px-4 py-2.5 text-xs font-bold text-left flex justify-between items-center ${abaSuspensa === 'mes' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-100'}`}>Por Mês <ChevronRight size={14}/></button>
+                <button onMouseEnter={() => setAbaSuspensa('ano')} className={`px-4 py-2.5 text-xs font-bold text-left flex justify-between items-center ${abaSuspensa === 'ano' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-100'}`}>Por Ano <ChevronRight size={14}/></button>
               </div>
-            </>
+
+              {/* Painel de Conteúdo (Bloqueio Futuro) */}
+              <div className="w-full md:w-2/3 p-4 bg-white min-h-[280px]">
+                {abaSuspensa === 'mes' && (
+                  <div className="h-full flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                      <button onClick={() => setAnoNavegacao(a => a-1)} className="p-1 hover:bg-slate-100 rounded"><ChevronLeft size={18}/></button>
+                      <span className={`font-black ${anoNavegacao === anoAtualReal ? 'text-blue-600' : 'text-slate-800'}`}>{anoNavegacao}</span>
+                      <button disabled={anoNavegacao >= anoAtualReal} onClick={() => setAnoNavegacao(a => a+1)} className="p-1 hover:bg-slate-100 rounded disabled:opacity-20"><ChevronRight size={18}/></button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {mesesExtenso.map((m, i) => {
+                        const futuro = isFuturo(i, anoNavegacao);
+                        const atual = i === mesAtualReal && anoNavegacao === anoAtualReal;
+                        return (
+                          <button 
+                            key={m} 
+                            disabled={futuro} 
+                            onClick={() => {setFiltro({tipo: 'mes', mes: i, ano: anoNavegacao}); setMenuDatasAberto(false)}}
+                            className={`py-2 text-[10px] font-black rounded-lg border transition-all 
+                              ${atual ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-sm' : 
+                                futuro ? 'text-slate-100 border-transparent cursor-not-allowed opacity-20' : 
+                                'bg-slate-50 text-slate-600 border-slate-100 hover:border-blue-300'}`}
+                          >
+                            {m}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {abaSuspensa === 'ano' && (
+                   <div className="grid grid-cols-2 gap-2 h-full items-center">
+                     {anosDisponiveis.map(ano => {
+                        const futuro = ano > anoAtualReal;
+                        return (
+                          <button key={ano} disabled={futuro} onClick={() => {setFiltro({tipo: 'ano', ano: ano}); setMenuDatasAberto(false)}}
+                            className={`py-4 font-black rounded-xl border transition-all ${ano === anoAtualReal ? 'bg-blue-50 text-blue-600 border-blue-200' : futuro ? 'text-slate-100 border-transparent opacity-20' : 'bg-slate-50 text-slate-600'}`}
+                          >
+                            {ano}
+                          </button>
+                        );
+                     })}
+                   </div>
+                )}
+                {['hoje', 'ontem', '7dias', '30dias'].includes(abaSuspensa) && (
+                  <div className="h-full flex flex-col justify-center items-center text-slate-300 text-center">
+                    <CalendarDays size={48} strokeWidth={1} className="mb-2 opacity-50" />
+                    <p className="text-xs font-bold">Clique para aplicar<br/>o período rápido</p>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>
 
       {carregando ? (
-        <div className="flex-1 flex flex-col items-center justify-center font-bold text-blue-600 text-lg md:text-xl py-32 animate-pulse gap-4">
+        <div className="py-32 text-center animate-pulse flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          Processando Balanço Financeiro...
+          <p className="font-black text-blue-600 uppercase tracking-widest text-sm">Calculando resultados...</p>
         </div>
       ) : (
-        <div className="space-y-6 animate-fade-in">
-          
-          {/* CARDS MACRO */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm relative overflow-hidden group hover:border-blue-300 transition-colors">
+        <div className="space-y-6">
+          {/* ✨ KPI CARDS (RESTAURADOS) ✨ */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-blue-100 shadow-sm relative overflow-hidden group">
               <TrendingUp className="absolute right-[-10px] bottom-[-10px] text-blue-500 opacity-10 group-hover:scale-110 transition-transform" size={80} />
               <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1 relative z-10">Faturamento Bruto</p>
               <p className="text-xl md:text-3xl font-black text-slate-800 truncate relative z-10">R$ {kpis.faturamento.toFixed(2)}</p>
             </div>
             
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:border-slate-300 transition-colors">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group">
               <ShoppingBag className="absolute right-[-10px] bottom-[-10px] text-slate-500 opacity-10 group-hover:scale-110 transition-transform" size={80} />
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 relative z-10">Volume de Peças</p>
               <p className="text-xl md:text-3xl font-black text-slate-800 relative z-10">{kpis.pecas} <span className="text-sm font-bold opacity-50">un.</span></p>
             </div>
             
-            <div className="bg-white p-5 rounded-2xl border border-red-100 shadow-sm relative overflow-hidden group hover:border-red-300 transition-colors">
+            <div className="bg-white p-5 rounded-2xl border border-red-100 shadow-sm relative overflow-hidden group">
               <Banknote className="absolute right-[-10px] bottom-[-10px] text-red-500 opacity-10 group-hover:scale-110 transition-transform" size={80} />
               <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1 relative z-10">Total de Despesas</p>
               <p className="text-xl md:text-3xl font-black text-slate-800 truncate relative z-10">R$ {kpis.despesas.toFixed(2)}</p>
@@ -413,89 +355,68 @@ export default function DashboardBI() {
             </div>
           </div>
 
-          {/* GRÁFICO PRINCIPAL DE LINHA */}
-          <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm">
+          {/* ✨ GRÁFICO PRINCIPAL (RESTAURADO) ✨ */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
               <h3 className="font-black text-slate-800 text-xs md:text-sm uppercase tracking-widest flex items-center gap-2">
                 <Activity size={18} className="text-blue-600" /> Curva Financeira
               </h3>
-              
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => setMostrarFaturamento(!mostrarFaturamento)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all flex items-center gap-2 ${mostrarFaturamento ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}>
-                  <div className={`w-2 h-2 rounded-full ${mostrarFaturamento ? 'bg-blue-600' : 'bg-slate-300'}`}></div> Faturamento
-                </button>
-                <button onClick={() => setMostrarLucro(!mostrarLucro)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all flex items-center gap-2 ${mostrarLucro ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}>
-                  <div className={`w-2 h-2 rounded-full ${mostrarLucro ? 'bg-emerald-500' : 'bg-slate-300'}`}></div> Lucro Líquido
-                </button>
-                <button onClick={() => setMostrarDespesas(!mostrarDespesas)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all flex items-center gap-2 ${mostrarDespesas ? 'bg-red-50 border-red-200 text-red-700' : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'}`}>
-                  <div className={`w-2 h-2 rounded-full ${mostrarDespesas ? 'bg-red-500' : 'bg-slate-300'}`}></div> Despesas
-                </button>
+                <button onClick={() => setMostrarFaturamento(!mostrarFaturamento)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${mostrarFaturamento ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>Faturamento</button>
+                <button onClick={() => setMostrarLucro(!mostrarLucro)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border transition-all ${mostrarLucro ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>Lucro Líquido</button>
               </div>
             </div>
-
-            <div className="h-52 md:h-72 w-full">
+            <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dadosGraficoLinha} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <LineChart data={dadosGraficoLinha}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis dataKey="tempo" fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontWeight: 'bold' }} dy={10} />
                   <YAxis hide domain={[0, maxEixoY]} />
-                  <Tooltip formatter={(value, name) => [`R$ ${value}`, name]} contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 'bold', color: '#1e293b' }} />
-                  {mostrarFaturamento && <Line type="monotone" dataKey="Faturamento" stroke="#2563eb" strokeWidth={3} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 6 }} />}
-                  {mostrarLucro && <Line type="monotone" dataKey="Lucro" stroke="#10b981" strokeWidth={4} dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} activeDot={{ r: 7 }} />}
-                  {mostrarDespesas && <Line type="monotone" dataKey="Despesas" stroke="#ef4444" strokeWidth={3} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 6 }} />}
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }} />
+                  {mostrarFaturamento && <Line type="monotone" dataKey="Faturamento" stroke="#2563eb" strokeWidth={3} dot={false} />}
+                  {mostrarLucro && <Line type="monotone" dataKey="Lucro" stroke="#10b981" strokeWidth={4} dot={false} />}
+                  {mostrarDespesas && <Line type="monotone" dataKey="Despesas" stroke="#ef4444" strokeWidth={3} dot={false} />}
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-            <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm">
-              <h3 className="font-black text-slate-800 mb-6 text-xs md:text-sm uppercase tracking-widest flex items-center gap-2">
-                <CalendarDays size={18} className="text-amber-500" /> Força por Dia da Semana
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* ✨ GIRO SEMANAL ✨ */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+              <h3 className="font-black text-slate-800 mb-6 text-sm uppercase tracking-widest flex items-center gap-2">
+                <CalendarDays size={18} className="text-amber-500" /> Força por Dia
               </h3>
               <div className="h-48 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dadosGraficoSemana} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="dia" fontSize={10} tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontWeight: 'bold' }} dy={5} />
-                    <YAxis hide />
-                    <Tooltip cursor={{ fill: '#f1f5f9' }} contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', fontWeight: 'bold', color: '#1e293b' }} />
-                    <Bar dataKey="Faturamento" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={30} />
+                  <BarChart data={dadosGraficoSemana}>
+                    <XAxis dataKey="dia" fontSize={10} axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontWeight: 'bold'}} />
+                    <Bar dataKey="Faturamento" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col">
-              <h3 className="font-black text-slate-800 mb-6 text-xs md:text-sm uppercase tracking-widest flex items-center gap-2">
-                <Banknote size={18} className="text-red-500" /> Custos e Despesas
+            {/* ✨ CATEGORIAS DESPESAS ✨ */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+              <h3 className="font-black text-slate-800 mb-6 text-sm uppercase tracking-widest flex items-center gap-2">
+                <Banknote size={18} className="text-red-500" /> Distribuição de Custos
               </h3>
-              {dadosCategoriasDespesas.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200"><p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Sem despesas no período</p></div>
-              ) : (
-                <div className="space-y-4">
-                  {dadosCategoriasDespesas.map(([cat, val]) => {
-                    const pct = ((val / kpis.despesas) * 100).toFixed(0);
-                    return (
-                      <div key={cat} className="group">
-                        <div className="flex justify-between items-end mb-1.5">
-                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-wide group-hover:text-red-600 transition-colors">{cat}</span>
-                          <div className="text-right flex items-center">
-                            <span className="text-[9px] text-slate-400 font-bold mr-2">{pct}%</span>
-                            <span className="text-xs font-black text-slate-800">R$ {val.toFixed(2)}</span>
-                          </div>
-                        </div>
-                        <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                          <div className="bg-gradient-to-r from-red-400 to-red-600 h-full rounded-full transition-all duration-500" style={{ width: `${pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="space-y-4">
+                {dadosCategoriasDespesas.map(([cat, val]) => (
+                  <div key={cat}>
+                    <div className="flex justify-between text-[10px] font-black uppercase mb-1">
+                      <span className="text-slate-600">{cat}</span>
+                      <span className="text-slate-800">R$ {val.toFixed(2)}</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                      <div className="bg-red-500 h-full rounded-full" style={{ width: `${(val / kpis.despesas * 100).toFixed(0)}%` }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-
         </div>
       )}
     </div>
