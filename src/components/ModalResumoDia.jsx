@@ -2,15 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import toast from 'react-hot-toast';
 import ModalEdicaoVenda from './ModalEdicaoVenda'; 
-import { X, TrendingUp, ShoppingBag, CreditCard, Banknote, Send, PackageSearch, Pencil, Trash2, Clock, BarChart2, ReceiptText, ChevronDown } from 'lucide-react';
+import { X, TrendingUp, ShoppingBag, CreditCard, Banknote, Send, PackageSearch, Pencil, Trash2, Clock, BarChart2, ReceiptText, ChevronDown, AlertTriangle } from 'lucide-react';
 
 export default function ModalResumoDia({ aberto, fechar, produtos }) { 
   const [vendasHoje, setVendasHoje] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [abaAtiva, setAbaAtiva] = useState('GERAL'); 
 
-  // ✨ CONTROLE DA SANFONA ✨
-  const [gruposExpandidos, setGruposExpandidos] = useState({});
+  // ✨ CONTROLES DE SANFONA ✨
+  const [gruposExpandidos, setGruposExpandidos] = useState({}); // Para o histórico
+  const [reposicaoExpandida, setReposicaoExpandida] = useState({}); // Para a reposição
 
   const [modalEdicaoAberto, setModalEdicaoAberto] = useState(false);
   const [vendaSendoEditada, setVendaSendoEditada] = useState(null);
@@ -147,7 +148,9 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
         Object.keys(tamanhos).sort(ordenarTamanhos).forEach(tam => {
           mensagem += `  ◾ *Tam: ${tam}*\n`;
           Object.keys(tamanhos[tam]).sort().forEach(cor => {
-            mensagem += `    ▫️ ${tamanhos[tam][cor]}x ${cor}\n`;
+            const pOriginal = produtos.find(p => p.nome === produto && p.tam === tam && p.cor === cor);
+            const zerou = (pOriginal?.estoque_banca || 0) <= 0;
+            mensagem += `    ▫️ ${tamanhos[tam][cor]}x ${cor} ${zerou ? '⚠️ *ZEROU NA BANCA*' : ''}\n`;
           });
         });
         mensagem += `\n`;
@@ -187,12 +190,13 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
     }
   };
 
-  // ✨ FUNÇÃO QUE ABRE E FECHA A SANFONA ✨
   const toggleSanfona = (id) => {
-    setGruposExpandidos(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+    setGruposExpandidos(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // ✨ NOVA FUNÇÃO PARA SANFONA DE REPOSIÇÃO ✨
+  const toggleSanfonaReposicao = (nome) => {
+    setReposicaoExpandida(prev => ({ ...prev, [nome]: !prev[nome] }));
   };
 
   if (!aberto) return null;
@@ -266,76 +270,97 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                   <Send size={20} /> Enviar Resumo Financeiro
                 </button>
 
+                {/* ✨ REPOSIÇÃO COM SANFONA E FILTRO DE BANCA ✨ */}
                 <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm mt-6">
                   <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center">
                     <h3 className="font-black text-slate-800 text-sm flex items-center gap-2">
-                      <PackageSearch size={18} className="text-amber-500" /> Precisa Repor na Banca:
+                      <PackageSearch size={18} className="text-amber-500" /> Reposição Inteligente
                     </h3>
                     <button onClick={enviarReposicaoTelegram} className="bg-slate-800 hover:bg-black text-white px-3 py-1.5 rounded-lg text-xs font-black uppercase flex items-center gap-2 transition-colors active:scale-95 shadow-sm">
                       <Send size={14} /> Enviar Lista
                     </button>
                   </div>
                   
-                  <div className="p-4 space-y-4">
+                  <div className="p-4 space-y-3">
                     {Object.keys(listaReposicao).length === 0 ? (
                       <p className="text-center text-slate-400 font-bold text-sm py-4">Nenhuma venda de catálogo hoje.</p>
                     ) : (
                       Object.keys(listaReposicao).map(produto => {
+                        const isExpandido = reposicaoExpandida[produto];
                         const tamanhos = listaReposicao[produto];
-                        let totalProduto = 0;
-                        Object.values(tamanhos).forEach(cores => {
-                          totalProduto += Object.values(cores).reduce((a, b) => a + b, 0);
-                        });
                         
+                        let totalProduto = 0;
+                        let temCritico = false;
+
+                        Object.keys(tamanhos).forEach(tam => {
+                          Object.keys(tamanhos[tam]).forEach(cor => {
+                            totalProduto += tamanhos[tam][cor];
+                            const pOrig = produtos.find(p => p.nome === produto && p.tam === tam && p.cor === cor);
+                            if ((pOrig?.estoque_banca || 0) <= 0) temCritico = true;
+                          });
+                        });
+
                         return (
-                          <div key={produto} className="border border-slate-200 rounded-xl p-3 bg-white">
-                            <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-100">
-                              <h4 className="font-black text-slate-800 uppercase text-sm">▼ {produto}</h4>
-                              <span className="text-[10px] font-black bg-red-50 text-red-600 px-2 py-0.5 rounded-md border border-red-100">{totalProduto} pçs p/ repor</span>
-                            </div>
-                            <div className="space-y-3">
-                              {Object.keys(tamanhos).sort(ordenarTamanhos).map(tam => (
-                                <div key={tam} className="bg-slate-50 rounded-lg border border-slate-100 overflow-hidden shadow-sm">
-                                  <div className="bg-slate-100/50 px-3 py-1.5 border-b border-slate-100">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tamanho: <span className="text-slate-800">{tam}</span></span>
+                          <div key={produto} className={`border rounded-xl overflow-hidden transition-all ${temCritico ? 'border-red-200' : 'border-slate-100'}`}>
+                            {/* HEADER DA SANFONA REPOSIÇÃO */}
+                            <button 
+                              onClick={() => toggleSanfonaReposicao(produto)}
+                              className={`w-full p-3 flex justify-between items-center transition-colors ${temCritico ? 'bg-red-50/50 hover:bg-red-100/50' : 'bg-slate-50/50 hover:bg-slate-100/50'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${isExpandido ? 'rotate-180' : ''}`} />
+                                <span className={`font-black uppercase text-xs ${temCritico ? 'text-red-700' : 'text-slate-800'}`}>{produto}</span>
+                              </div>
+                              <span className={`text-[10px] font-black px-2 py-1 rounded-md ${temCritico ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+                                {totalProduto} pçs p/ repor
+                              </span>
+                            </button>
+
+                            {/* CONTEÚDO DA SANFONA REPOSIÇÃO */}
+                            {isExpandido && (
+                              <div className="p-3 space-y-3 bg-white animate-fade-in">
+                                {Object.keys(tamanhos).sort(ordenarTamanhos).map(tam => (
+                                  <div key={tam} className="bg-slate-50 rounded-lg border border-slate-100 overflow-hidden shadow-sm">
+                                    <div className="bg-slate-100/50 px-3 py-1.5 border-b border-slate-100">
+                                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tamanho: <span className="text-slate-800">{tam}</span></span>
+                                    </div>
+                                    <div className="px-3 py-2 space-y-1">
+                                      {Object.keys(tamanhos[tam]).sort().map(cor => {
+                                        const pOriginal = produtos.find(p => p.nome === produto && p.tam === tam && p.cor === cor);
+                                        const zerou = (pOriginal?.estoque_banca || 0) <= 0;
+                                        return (
+                                          <div key={cor} className="flex justify-between items-center text-xs">
+                                            <span className={`font-bold ${zerou ? 'text-red-600' : 'text-slate-600'}`}>{cor}</span>
+                                            <div className="flex items-center gap-2">
+                                              {zerou && <AlertTriangle size={12} className="text-red-500" />}
+                                              <span className={`font-black ${zerou ? 'text-red-600' : 'text-slate-800'}`}>{tamanhos[tam][cor]} un.</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
                                   </div>
-                                  <div className="px-3 py-2 space-y-1">
-                                    {Object.keys(tamanhos[tam]).sort().map(cor => (
-                                      <div key={cor} className="flex justify-between items-center text-xs">
-                                        <span className="font-bold text-slate-600">{cor}</span>
-                                        <span className="font-black text-red-500">{tamanhos[tam][cor]} un.</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         );
                       })
                     )}
                   </div>
                 </div>
-
               </div>
             ) : (
-              
+              /* HISTÓRICO ORIGINAL MANTIDO */
               <div className="space-y-4 animate-fade-in pb-4">
                 {vendasAgrupadas.length === 0 ? (
                   <p className="text-center text-slate-400 font-bold py-10">Nenhuma venda registrada hoje.</p>
                 ) : (
                   vendasAgrupadas.map((grupo, index) => {
-                    // Por padrão é false (fechado). Só abre se clicar.
                     const isExpandido = gruposExpandidos[grupo.id_grupo];
-
                     return (
                       <div key={grupo.id_grupo} className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-hidden transition-all hover:shadow-md">
-                        
-                        {/* CABEÇALHO CLICÁVEL (A SANFONA) */}
-                        <div 
-                          className="bg-slate-50 px-4 py-3 flex justify-between items-center flex-wrap gap-2 cursor-pointer hover:bg-slate-100 transition-colors"
-                          onClick={() => toggleSanfona(grupo.id_grupo)}
-                        >
+                        <div className="bg-slate-50 px-4 py-3 flex justify-between items-center flex-wrap gap-2 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => toggleSanfona(grupo.id_grupo)}>
                           <div className="flex items-center gap-3">
                             <div className="bg-blue-100 text-blue-700 w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0">
                               #{vendasAgrupadas.length - index}
@@ -347,56 +372,32 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
                               </span>
                             </div>
                           </div>
-                          
                           <div className="flex items-center gap-4 ml-auto">
                             <div className="text-right">
                               <span className="font-black text-emerald-600 text-lg block leading-none mb-1">R$ {grupo.total.toFixed(2)}</span>
-                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                {Array.from(grupo.pagamentos).join(' + ')}
-                              </span>
+                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{Array.from(grupo.pagamentos).join(' + ')}</span>
                             </div>
-                            
-                            {/* BOTOES QUE NÃO DISPARAM A SANFONA (e.stopPropagation) */}
                             <div className="flex gap-1.5 border-l border-slate-200 pl-4" onClick={(e) => e.stopPropagation()}>
-                              <button onClick={() => abrirEdicaoGrupo(grupo.itens)} className="flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white w-8 h-8 rounded-lg transition-colors border border-blue-100 hover:border-blue-600" title="Editar Venda">
-                                <Pencil size={14} strokeWidth={2.5} />
-                              </button>
-                              <button onClick={() => confirmarExclusaoGrupo(grupo)} className="flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-600 hover:text-white w-8 h-8 rounded-lg transition-colors border border-red-100 hover:border-red-600" title="Excluir Venda">
-                                <Trash2 size={14} strokeWidth={2.5} />
-                              </button>
+                              <button onClick={() => abrirEdicaoGrupo(grupo.itens)} className="flex items-center justify-center bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white w-8 h-8 rounded-lg transition-colors border border-blue-100 hover:border-blue-600"><Pencil size={14} strokeWidth={2.5} /></button>
+                              <button onClick={() => confirmarExclusaoGrupo(grupo)} className="flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-600 hover:text-white w-8 h-8 rounded-lg transition-colors border border-red-100 hover:border-red-600"><Trash2 size={14} strokeWidth={2.5} /></button>
                             </div>
-                            
-                            {/* ÍCONE DA SANFONA */}
                             <ChevronDown className={`text-slate-400 transition-transform duration-300 ${isExpandido ? 'rotate-180' : ''}`} size={20} />
                           </div>
                         </div>
-
-                        {/* CONTEÚDO DA SANFONA (Só aparece se clicar) */}
                         {isExpandido && (
                           <div className="p-0 border-t border-slate-100 animate-fade-in">
-                            <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100 flex text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              <span className="flex-1">Produto</span>
-                              <span className="w-20 text-right">Total</span>
-                            </div>
-                            
+                            <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100 flex text-[10px] font-bold text-slate-400 uppercase tracking-widest"><span className="flex-1">Produto</span><span className="w-20 text-right">Total</span></div>
                             {grupo.itens.map(venda => (
                               <div key={venda.id} className="flex items-center px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
                                 <div className="flex-1">
-                                  <p className="font-black text-slate-700 text-sm leading-tight flex items-center gap-1.5">
-                                    <span className="text-blue-600">{venda.quantidade}x</span> {venda.produto_nome}
-                                  </p>
-                                  <p className="font-bold text-slate-400 text-[10px] mt-0.5 uppercase tracking-wide">
-                                    Tam: {venda.produto_tam} | Cor: {venda.produto_cor}
-                                  </p>
+                                  <p className="font-black text-slate-700 text-sm leading-tight flex items-center gap-1.5"><span className="text-blue-600">{venda.quantidade}x</span> {venda.produto_nome}</p>
+                                  <p className="font-bold text-slate-400 text-[10px] mt-0.5 uppercase tracking-wide">Tam: {venda.produto_tam} | Cor: {venda.produto_cor}</p>
                                 </div>
-                                <div className="w-20 text-right font-black text-slate-700 text-sm">
-                                  R$ {parseFloat(venda.total_item).toFixed(2)}
-                                </div>
+                                <div className="w-20 text-right font-black text-slate-700 text-sm">R$ {parseFloat(venda.total_item).toFixed(2)}</div>
                               </div>
                             ))}
                           </div>
                         )}
-
                       </div>
                     );
                   })
@@ -410,11 +411,7 @@ export default function ModalResumoDia({ aberto, fechar, produtos }) {
       {modalEdicaoAberto && (
         <ModalEdicaoVenda 
           venda={vendaSendoEditada}
-          fechar={() => {
-            setModalEdicaoAberto(false);
-            setVendaSendoEditada(null);
-            buscarVendasDeHoje(); 
-          }} 
+          fechar={() => { setModalEdicaoAberto(false); setVendaSendoEditada(null); buscarVendasDeHoje(); }} 
           produtos={produtos}
           atualizarVendas={buscarVendasDeHoje} 
         />
