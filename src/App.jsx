@@ -18,13 +18,14 @@ import TelaFinanceiro from './components/TelaFinanceiro';
 import Perfil from './components/Perfil';
 import TelaRankings from './components/TelaRankings'; 
 import TelaHistoricoVendas from './components/TelaHistoricoVendas';
-import TelaReposicao from './components/TelaReposicao'; // ✨ NOVO IMPORT DA TELA AQUI ✨
+import TelaReposicao from './components/TelaReposicao';
 
 export default function App() {
   const [sessao, setSessao] = useState(null);
   const [verificandoSessao, setVerificandoSessao] = useState(true);
 
   const [produtos, setProdutos] = useState([]);
+  const [vendasParaRanking, setVendasParaRanking] = useState([]); // ✨ NOVO ESTADO PARA O RANKING
   const [carregando, setCarregando] = useState(true);
   
   const [telaAtiva, setTelaAtiva] = useState('PDV'); 
@@ -56,9 +57,7 @@ export default function App() {
 
   useEffect(() => {
     if (sessao?.user?.id) {
-      setProdutos([]);
-      setCarrinho([]);
-      buscarProdutos();
+      buscarDadosIniciais(); // ✨ CHAMADA UNIFICADA
     } else {
       setProdutos([]);
       setCarrinho([]);
@@ -66,11 +65,26 @@ export default function App() {
     }
   }, [sessao?.user?.id]);
 
-  const buscarProdutos = async () => {
+  // ✨ BUSCA PRODUTOS E VENDAS (PARA O RANKING)
+  const buscarDadosIniciais = async () => {
     setCarregando(true);
+    
+    // Busca produtos e histórico de vendas em paralelo para ser mais rápido
+    const [resProdutos, resVendas] = await Promise.all([
+      supabase.from('produtos').select('*').order('nome', { ascending: true }),
+      supabase.from('vendas').select('produto_nome') // Só o nome basta para contar
+    ]);
+
+    if (!resProdutos.error) setProdutos(resProdutos.data);
+    if (!resVendas.error) setVendasParaRanking(resVendas.data);
+    
+    setCarregando(false);
+  };
+
+  // Mantendo a função buscarProdutos original para compatibilidade com os modais antigos
+  const buscarProdutos = async () => {
     const { data, error } = await supabase.from('produtos').select('*').order('nome', { ascending: true });
     if (!error) setProdutos(data);
-    setCarregando(false);
   };
 
   const transferirParaBanca = async (transferencias, direcao = 'SACO_PARA_BANCA') => {
@@ -86,7 +100,6 @@ export default function App() {
         
         if (produto) {
           let novaBanca, novoSaco;
-          
           if (direcao === 'SACO_PARA_BANCA') {
             if (produto.estoque_saco < qtd) continue; 
             novaBanca = (produto.estoque_banca || 0) + qtd;
@@ -96,11 +109,10 @@ export default function App() {
             novaBanca = (produto.estoque_banca || 0) - qtd;
             novoSaco = (produto.estoque_saco || 0) + qtd;
           }
-
           await supabase.from('produtos').update({ estoque_saco: novoSaco, estoque_banca: novaBanca }).eq('id', id);
         }
       }
-      await buscarProdutos();
+      await buscarDadosIniciais();
       setCarregando(false);
       toast.success("Transferência concluída!", { id: loadingId });
     } catch (error) {
@@ -112,7 +124,6 @@ export default function App() {
 
   const adicionarAoCarrinho = (produto) => {
     const itemNoCarrinho = carrinho.find(item => item.produto.id === produto.id);
-    
     const isGenerico = String(produto.id).startsWith('GEN-');
     const estoqueTotalDisponivel = isGenerico ? 9999 : ((produto.estoque_banca || 0) + (produto.estoque_saco || 0));
     
@@ -131,7 +142,6 @@ export default function App() {
       if (item.produto.id === produtoId) {
         const isGenerico = String(produtoId).startsWith('GEN-');
         const estoqueTotalDisponivel = isGenerico ? 9999 : ((item.produto.estoque_banca || 0) + (item.produto.estoque_saco || 0));
-        
         const novaQtd = item.qtd + delta;
         if (novaQtd > estoqueTotalDisponivel) { toast.error("Estoque limite atingido!"); return item; }
         return { ...item, qtd: novaQtd };
@@ -148,7 +158,6 @@ export default function App() {
     
     for (const item of itensVendidos) {
       const isGenerico = String(item.id).startsWith('GEN-');
-
       if (!isGenerico) {
         let qtdRestanteParaBaixar = item.quantidade;
         let novoEstoqueBanca = item.produtoCompleto.estoque_banca || 0;
@@ -175,23 +184,19 @@ export default function App() {
         forma_pagamento: formaPagamento,
         user_id: sessao.user.id
       };
-
-      if (!isGenerico) {
-        registro.produto_id = item.id;
-      }
-
+      if (!isGenerico) registro.produto_id = item.id;
       registrosVenda.push(registro);
     }
     
     await supabase.from('vendas').insert(registrosVenda);
     setCarrinho([]);
     setModalCarrinhoAberto(false);
-    await buscarProdutos(); 
+    await buscarDadosIniciais(); 
     setCarregando(false);
     toast.success("Venda finalizada com sucesso!");
   };
 
-  if (verificandoSessao) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50">Iniciando BancaFlash... ⚡</div>;
+  if (verificandoSessao) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50 font-sans">BancaFlash Inicializando... ⚡</div>;
 
   if (!sessao) {
     return (
@@ -202,7 +207,7 @@ export default function App() {
     );
   }
 
-  if (carregando && produtos.length === 0) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50">Sincronizando sua Banca... ⏳</div>;
+  if (carregando && produtos.length === 0) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 bg-slate-50 font-sans">Sincronizando Dados... ⏳</div>;
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans relative">
@@ -223,7 +228,11 @@ export default function App() {
         
         <main className="flex-1 overflow-y-auto relative bg-slate-50">
           {telaAtiva === 'PDV' ? (
-            <Vitrine produtos={produtos} setProdutoAberto={setProdutoAberto} />
+            <Vitrine 
+              produtos={produtos} 
+              vendas={vendasParaRanking} // ✨ PASSANDO AS VENDAS PARA O RANKING
+              setProdutoAberto={setProdutoAberto} 
+            />
           ) : telaAtiva === 'BI' ? (
             <DashboardBI />
           ) : telaAtiva === 'RANKING' ? (
@@ -234,7 +243,7 @@ export default function App() {
             <TelaFinanceiro />
           ) : telaAtiva === 'PERFIL' ? (
             <Perfil />
-          ) : telaAtiva === 'reposicao' ? ( // ✨ TELA NOVA RENDERIZADA AQUI ✨
+          ) : telaAtiva === 'reposicao' ? (
             <TelaReposicao />
           ) : null}
         </main>
@@ -252,9 +261,10 @@ export default function App() {
         produtos={produtos} carrinho={carrinho} adicionarAoCarrinho={adicionarAoCarrinho} alterarQuantidadeCarrinho={alterarQuantidadeCarrinho}
       />
       
+      {/* ✨ REPASSANDO A FUNÇÃO DE REFRESH PARA O MODAL DE GERENCIAMENTO */}
       <GerenciarEstoque 
         aberto={modalAdminAberto} fechar={() => setModalAdminAberto(false)} 
-        produtos={produtos} buscarProdutos={buscarProdutos} 
+        produtos={produtos} buscarProdutos={buscarDadosIniciais} 
       />
 
       <LocalizadorEstoque 
@@ -264,12 +274,12 @@ export default function App() {
 
       <ModalReposicao
         aberto={modalReposicaoAberto} fechar={() => setModalReposicaoAberto(false)}
-        produtos={produtos} buscarProdutos={buscarProdutos}
+        produtos={produtos} buscarProdutos={buscarDadosIniciais}
       />
 
       <ModalConciliacao 
         aberto={modalConciliacaoAberto} fechar={() => setModalConciliacaoAberto(false)}
-        produtos={produtos} buscarProdutos={buscarProdutos}
+        produtos={produtos} buscarProdutos={buscarDadosIniciais}
       />
 
       <ModalResumoDia 
