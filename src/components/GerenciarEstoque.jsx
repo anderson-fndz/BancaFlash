@@ -89,10 +89,9 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
 
   const handleValorAjuste = (id, campo, valor) => {
     const numero = parseInt(valor) || 0;
-    const valorMinimo = campo === 'meta' ? 1 : 0; // Meta nunca pode ser menor que 1
     setValoresAjuste(prev => ({
       ...prev,
-      [id]: { ...prev[id], [campo]: Math.max(valorMinimo, numero) } 
+      [id]: { ...prev[id], [campo]: Math.max(0, numero) } 
     }));
   };
 
