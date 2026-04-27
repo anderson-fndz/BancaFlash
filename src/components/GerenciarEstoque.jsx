@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import toast from 'react-hot-toast';
-import { X, Settings, Plus, ChevronDown, ChevronRight, Pencil, Trash2, Zap, Save, Search, Edit3, BellRing, Eye, EyeOff } from 'lucide-react';
+import { X, Settings, Plus, ChevronDown, ChevronRight, Pencil, Trash2, Zap, Save, Search, Edit3, BellRing } from 'lucide-react';
 
 import ModalVariacoesRapidas from './ModalVariacoesRapidas';
 import ModalEdicaoMassa from './ModalEdicaoMassa';
@@ -20,33 +20,14 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   const [modalVariacaoRapidaAberto, setModalVariacaoRapidaAberto] = useState(false);
   const [produtoRapidoSelecionado, setProdutoRapidoSelecionado] = useState(null);
 
-  const [modoAjusteRapido, setModoAjusteRapido] = useState(null); 
+  const [modoAjusteRapido, setModoAjusteRapido] = useState(null); // Para Estoque
+  const [modoAjusteMeta, setModoAjusteMeta] = useState(null);     // Para Alertas
   const [valoresAjuste, setValoresAjuste] = useState({}); 
 
   if (!aberto) return null;
 
   const nomesUnicos = [...new Set(produtos.map(p => p.nome))];
   const modelosFiltrados = nomesUnicos.filter(nome => nome.toLowerCase().includes(busca.toLowerCase()));
-
-  // ✨ FUNÇÃO: DESATIVAR/ATIVAR MODELO INTEIRO ✨
-  const toggleAtivoModelo = async (nomeProduto, statusAtual) => {
-    const novoStatus = !statusAtual;
-    const acao = novoStatus ? "reativado" : "desativado";
-    const loadingId = toast.loading(`${novoStatus ? 'Ativando' : 'Escondendo'} modelo...`);
-    
-    try {
-      const { error } = await supabase
-        .from('produtos')
-        .update({ ativo: novoStatus })
-        .eq('nome', nomeProduto);
-
-      if (error) throw error;
-      await buscarProdutos();
-      toast.success(`Modelo ${nomeProduto} ${acao}!`, { id: loadingId });
-    } catch (error) {
-      toast.error("Erro ao mudar status.", { id: loadingId });
-    }
-  };
 
   const limparTamanho = (t) => String(t || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
   const ordemTamanhos = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3', 'G4', 'U'];
@@ -61,19 +42,11 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
   };
 
   const toggleSanfona = (nomeProduto) => {
-    if (expandidos[nomeProduto] && modoAjusteRapido === nomeProduto) {
+    if (expandidos[nomeProduto] && (modoAjusteRapido === nomeProduto || modoAjusteMeta === nomeProduto)) {
       setModoAjusteRapido(null);
+      setModoAjusteMeta(null);
     }
     setExpandidos(prev => ({ ...prev, [nomeProduto]: !prev[nomeProduto] }));
-  };
-
-  const excluirProdutoMassa = async (nomeProduto) => {
-    if (window.confirm(`ATENÇÃO: Você tem certeza que deseja excluir o modelo "${nomeProduto}" INTEIRO?`)) {
-      const loadingId = toast.loading("Excluindo modelo...");
-      await supabase.from('produtos').delete().eq('nome', nomeProduto);
-      await buscarProdutos();
-      toast.success("Modelo excluído!", { id: loadingId });
-    }
   };
 
   const excluirVariacao = async (id) => {
@@ -85,45 +58,80 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
     }
   };
 
+  // ✨ INICIA O MODO DE AJUSTE DE ESTOQUE ✨
   const iniciarAjusteRapido = (nomeProduto, variacoes) => {
     const valoresIniciais = {};
     variacoes.forEach(v => {
       valoresIniciais[v.id] = {
         banca: v.estoque_banca || 0,
-        saco: v.estoque_saco || 0,
-        meta: v.meta_global > 0 ? v.meta_global : 1 
+        saco: v.estoque_saco || 0
       };
     });
     setValoresAjuste(valoresIniciais);
     setModoAjusteRapido(nomeProduto);
+    setModoAjusteMeta(null); // Fecha o de meta se estiver aberto
+    setExpandidos(prev => ({ ...prev, [nomeProduto]: true })); 
+  };
+
+  // ✨ INICIA O NOVO MODO DE AJUSTE DE METAS ✨
+  const iniciarAjusteMeta = (nomeProduto, variacoes) => {
+    const valoresIniciais = {};
+    variacoes.forEach(v => {
+      valoresIniciais[v.id] = {
+        meta: v.meta_global > 0 ? v.meta_global : 1 
+      };
+    });
+    setValoresAjuste(valoresIniciais);
+    setModoAjusteMeta(nomeProduto);
+    setModoAjusteRapido(null); // Fecha o de estoque se estiver aberto
     setExpandidos(prev => ({ ...prev, [nomeProduto]: true })); 
   };
 
   const handleValorAjuste = (id, campo, valor) => {
     const numero = parseInt(valor) || 0;
-    const valorMinimo = campo === 'meta' ? 1 : 0;
+    const valorMinimo = campo === 'meta' ? 1 : 0; // Meta nunca pode ser menor que 1
     setValoresAjuste(prev => ({
       ...prev,
       [id]: { ...prev[id], [campo]: Math.max(valorMinimo, numero) } 
     }));
   };
 
-  const salvarAjusteEmMassa = async (variacoes) => {
-    const loadingId = toast.loading("Salvando...");
+  // ✨ SALVA O ESTOQUE ✨
+  const salvarAjusteEstoque = async (variacoes) => {
+    const loadingId = toast.loading("Salvando estoque...");
     try {
       for (const variacao of variacoes) {
         const novosValores = valoresAjuste[variacao.id];
-        if (novosValores) {
+        if (novosValores && (novosValores.banca !== undefined || novosValores.saco !== undefined)) {
           await supabase.from('produtos').update({ 
             estoque_banca: novosValores.banca, 
-            estoque_saco: novosValores.saco,
-            meta_global: novosValores.meta 
+            estoque_saco: novosValores.saco
           }).eq('id', variacao.id);
         }
       }
       await buscarProdutos();
       setModoAjusteRapido(null);
-      toast.success("Atualizado!", { id: loadingId });
+      toast.success("Estoque atualizado!", { id: loadingId });
+    } catch (error) {
+      toast.error("Erro ao salvar.", { id: loadingId });
+    }
+  };
+
+  // ✨ SALVA AS METAS ✨
+  const salvarAjusteMeta = async (variacoes) => {
+    const loadingId = toast.loading("Salvando alertas...");
+    try {
+      for (const variacao of variacoes) {
+        const novosValores = valoresAjuste[variacao.id];
+        if (novosValores && novosValores.meta !== undefined) {
+          await supabase.from('produtos').update({ 
+            meta_global: novosValores.meta 
+          }).eq('id', variacao.id);
+        }
+      }
+      await buscarProdutos();
+      setModoAjusteMeta(null);
+      toast.success("Metas atualizadas!", { id: loadingId });
     } catch (error) {
       toast.error("Erro ao salvar.", { id: loadingId });
     }
@@ -172,14 +180,16 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
             const estoqueTotal = variacoes.reduce((acc, p) => acc + (p.estoque_banca || 0) + (p.estoque_saco || 0), 0);
             const estaAtivo = variacoes[0]?.ativo !== false;
             const estaExpandido = expandidos[nome];
-            const emAjuste = modoAjusteRapido === nome;
+            const emAjusteEstoque = modoAjusteRapido === nome;
+            const emAjusteMeta = modoAjusteMeta === nome;
+            const qualquerAjuste = emAjusteEstoque || emAjusteMeta;
             
             return (
-              <div key={nome} className={`bg-white rounded-2xl shadow-sm border transition-all ${!estaAtivo ? 'opacity-60 grayscale-[0.5] border-dashed' : 'border-slate-200'} ${emAjuste ? 'border-amber-300 ring-2 ring-amber-50' : ''}`}>
+              <div key={nome} className={`bg-white rounded-2xl shadow-sm border transition-all ${!estaAtivo ? 'opacity-60 grayscale-[0.5] border-dashed' : 'border-slate-200'} ${emAjusteEstoque ? 'border-amber-300 ring-2 ring-amber-50' : emAjusteMeta ? 'border-purple-300 ring-2 ring-purple-50' : ''}`}>
                 
-                <div className={`p-3 md:p-4 flex flex-col md:flex-row md:justify-between md:items-center gap-3 border-b ${emAjuste ? 'bg-amber-50/50' : 'bg-slate-50/30'}`}>
+                <div className={`p-3 md:p-4 flex flex-col md:flex-row md:justify-between md:items-center gap-3 border-b ${emAjusteEstoque ? 'bg-amber-50/50' : emAjusteMeta ? 'bg-purple-50/50' : 'bg-slate-50/30'}`}>
                   
-                  <div onClick={() => !emAjuste && toggleSanfona(nome)} className="flex items-center gap-2 select-none flex-1 cursor-pointer group">
+                  <div onClick={() => !qualquerAjuste && toggleSanfona(nome)} className="flex items-center gap-2 select-none flex-1 cursor-pointer group">
                     <div className={`w-6 h-6 rounded-md flex items-center justify-center ${estaAtivo ? 'text-slate-400' : 'text-slate-300'}`}>
                       {estaExpandido ? <ChevronDown size={18} strokeWidth={3} /> : <ChevronRight size={18} strokeWidth={3} />}
                     </div>
@@ -188,31 +198,46 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
 
                   <div className="flex items-center gap-1.5 pl-8 md:pl-0">
                     <span className="text-[10px] font-black text-slate-500 bg-white border border-slate-200 px-2 py-1.5 rounded-lg mr-1">{estoqueTotal} un.</span>
-                    {!emAjuste ? (
+                    {!qualquerAjuste ? (
                       <>
-                        {/* REATIVADO: Botão Adicionar Cor/Tam (Verde) */}
+                        {/* 1. ADICIONAR VARIAÇÃO (+) */}
                         <button 
                           onClick={(e) => { e.stopPropagation(); setProdutoRapidoSelecionado(variacoes[0]); setModalVariacaoRapidaAberto(true); }} 
-                          className="w-8 h-8 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg flex items-center justify-center hover:bg-emerald-100 transition-colors"
+                          className="w-9 h-9 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl flex items-center justify-center hover:bg-emerald-100 transition-colors"
                           title="Adicionar Cor/Tamanho"
                         >
-                          <Plus size={16} strokeWidth={3} />
+                          <Plus size={18} strokeWidth={3} />
                         </button>
 
+                        {/* ✨ 2. NOVO: AJUSTE DE METAS (SINO ROXO) ✨ */}
                         <button 
-                          onClick={(e) => { e.stopPropagation(); toggleAtivoModelo(nome, estaAtivo); }}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${estaAtivo ? 'bg-blue-50 border-blue-100 text-blue-600' : 'bg-slate-200 border-slate-300 text-slate-500'}`}
-                          title={estaAtivo ? "Desativar da Vitrine" : "Ativar na Vitrine"}
+                          onClick={(e) => { e.stopPropagation(); iniciarAjusteMeta(nome, variacoes); }} 
+                          className="w-9 h-9 bg-purple-50 text-purple-600 border border-purple-100 rounded-xl flex items-center justify-center hover:bg-purple-100 transition-all shadow-sm"
+                          title="Ajustar Alerta Mínimo"
                         >
-                          {estaAtivo ? <Eye size={16} /> : <EyeOff size={16} />}
+                          <BellRing size={16} strokeWidth={2.5} />
                         </button>
 
-                        <button onClick={(e) => { e.stopPropagation(); iniciarAjusteRapido(nome, variacoes); }} className="w-8 h-8 bg-amber-50 text-amber-600 border border-amber-100 rounded-lg flex items-center justify-center hover:bg-amber-100"><Zap size={16} className="fill-amber-500" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); setProdutoMassaSelecionado(variacoes[0]); setModalEdicaoMassaAberto(true); }} className="w-8 h-8 bg-white text-slate-400 border border-slate-200 rounded-lg flex items-center justify-center hover:text-blue-600"><Edit3 size={16} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); excluirProdutoMassa(nome); }} className="w-8 h-8 bg-white text-slate-400 border border-slate-200 rounded-lg flex items-center justify-center hover:text-red-600"><Trash2 size={16} /></button>
+                        {/* 3. AJUSTE RÁPIDO DE ESTOQUE (RAIO) */}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); iniciarAjusteRapido(nome, variacoes); }} 
+                          className="w-9 h-9 bg-amber-50 text-amber-600 border border-amber-100 rounded-xl flex items-center justify-center hover:bg-amber-100 transition-all shadow-sm"
+                          title="Ajuste Rápido de Estoque"
+                        >
+                          <Zap size={18} className="fill-amber-500" />
+                        </button>
+
+                        {/* 4. EDITAR COMPLETO (LÁPIS) */}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setProdutoMassaSelecionado(variacoes[0]); setModalEdicaoMassaAberto(true); }} 
+                          className="w-9 h-9 bg-blue-600 text-white border border-blue-700 rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all"
+                          title="Configurações do Modelo"
+                        >
+                          <Edit3 size={18} strokeWidth={2.5} />
+                        </button>
                       </>
                     ) : (
-                      <button onClick={() => setModoAjusteRapido(null)} className="text-[10px] font-black bg-white border border-slate-300 text-slate-500 px-3 py-1.5 rounded-lg uppercase">Cancelar</button>
+                      <button onClick={() => { setModoAjusteRapido(null); setModoAjusteMeta(null); }} className="text-[10px] font-black bg-white border border-slate-300 text-slate-500 px-3 py-1.5 rounded-lg uppercase">Cancelar</button>
                     )}
                   </div>
                 </div>
@@ -228,32 +253,64 @@ export default function GerenciarEstoque({ aberto, fechar, produtos, buscarProdu
                             <p className={`font-bold text-xs md:text-sm uppercase tracking-tight ${!estaAtivo ? 'text-slate-300' : 'text-slate-800'}`}>
                               <span className={estaAtivo ? "text-blue-600 font-black" : "text-slate-400"}>{v.tam}</span> | {v.cor}
                             </p>
-                            {v.meta_global > 0 && (
+                            {v.meta_global > 0 && !emAjusteMeta && (
                               <p className={`text-[9px] font-black mt-1 uppercase tracking-widest flex items-center gap-1 ${emAlerta ? 'text-red-500' : 'text-slate-400'}`}>
-                                {emAlerta && <BellRing size={10} />} Alerta: {v.meta_global} un.
+                                {emAlerta && <BellRing size={10} />} Alerta atual: {v.meta_global} un.
                               </p>
                             )}
                           </div>
                           <div className="flex items-center gap-3">
-                            {emAjuste ? (
-                              <div className="flex items-center gap-2 bg-amber-50 p-1 rounded-lg">
-                                <input type="number" className="w-10 text-center text-xs font-black p-1 border rounded" value={valoresAjuste[v.id]?.banca ?? 0} onChange={(e) => handleValorAjuste(v.id, 'banca', e.target.value)} />
-                                <input type="number" className="w-10 text-center text-xs font-black p-1 border rounded" value={valoresAjuste[v.id]?.saco ?? 0} onChange={(e) => handleValorAjuste(v.id, 'saco', e.target.value)} />
+                            
+                            {/* CAIXAS DE ESTOQUE */}
+                            {emAjusteEstoque && (
+                              <div className="flex items-center gap-2 bg-amber-50 p-1.5 rounded-xl border border-amber-100">
+                                <div className="flex flex-col items-center">
+                                  <span className="text-[8px] font-black text-amber-700 uppercase tracking-widest mb-0.5">Banca</span>
+                                  <input type="number" className="w-12 text-center text-xs font-black py-1 border border-slate-200 rounded-md focus:border-amber-400 outline-none" value={valoresAjuste[v.id]?.banca ?? 0} onChange={(e) => handleValorAjuste(v.id, 'banca', e.target.value)} />
+                                </div>
+                                <div className="flex flex-col items-center">
+                                  <span className="text-[8px] font-black text-amber-700 uppercase tracking-widest mb-0.5">Saco</span>
+                                  <input type="number" className="w-12 text-center text-xs font-black py-1 border border-slate-200 rounded-md focus:border-amber-400 outline-none" value={valoresAjuste[v.id]?.saco ?? 0} onChange={(e) => handleValorAjuste(v.id, 'saco', e.target.value)} />
+                                </div>
                               </div>
-                            ) : (
+                            )}
+
+                            {/* ✨ CAIXAS DE META ✨ */}
+                            {emAjusteMeta && (
+                              <div className="flex items-center gap-2 bg-purple-50 p-1.5 rounded-xl border border-purple-100">
+                                <div className="flex flex-col items-center">
+                                  <span className="text-[8px] font-black text-purple-700 uppercase tracking-widest mb-0.5 flex items-center gap-1"><BellRing size={8}/> Alerta Mín.</span>
+                                  <input type="number" className="w-16 text-center text-sm font-black py-1 border border-slate-200 rounded-md text-purple-700 focus:border-purple-400 outline-none" value={valoresAjuste[v.id]?.meta ?? 0} onChange={(e) => handleValorAjuste(v.id, 'meta', e.target.value)} />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* BOTOES PADRAO */}
+                            {!qualquerAjuste && (
                               <div className="flex gap-1.5">
-                                <button onClick={() => { setProdutoEditando(v); setModalPassosAberto(true); }} className="w-7 h-7 bg-slate-50 text-slate-400 rounded flex items-center justify-center"><Pencil size={12}/></button>
-                                <button onClick={() => excluirVariacao(v.id)} className="w-7 h-7 bg-slate-50 text-slate-400 rounded flex items-center justify-center"><Trash2 size={12}/></button>
+                                <button onClick={() => { setProdutoEditando(v); setModalPassosAberto(true); }} className="w-7 h-7 bg-slate-50 text-slate-400 rounded flex items-center justify-center hover:text-blue-600"><Pencil size={12}/></button>
+                                <button onClick={() => excluirVariacao(v.id)} className="w-7 h-7 bg-slate-50 text-slate-400 rounded flex items-center justify-center hover:text-red-600"><Trash2 size={12}/></button>
                               </div>
                             )}
                           </div>
                         </div>
                       )
                     })}
-                    {emAjuste && (
+
+                    {/* BOTAO SALVAR ESTOQUE */}
+                    {emAjusteEstoque && (
                       <div className="p-3 bg-amber-50">
-                        <button onClick={() => salvarAjusteEmMassa(variacoes)} className="w-full bg-amber-500 text-amber-950 font-black py-3 rounded-xl uppercase text-[10px] flex items-center justify-center gap-2">
-                          <Save size={14} /> Salvar Alterações
+                        <button onClick={() => salvarAjusteEstoque(variacoes)} className="w-full bg-amber-500 text-amber-950 font-black py-3 rounded-xl uppercase text-[10px] flex items-center justify-center gap-2 shadow-md">
+                          <Save size={14} /> Salvar Estoque
+                        </button>
+                      </div>
+                    )}
+
+                    {/* ✨ BOTAO SALVAR METAS ✨ */}
+                    {emAjusteMeta && (
+                      <div className="p-3 bg-purple-50">
+                        <button onClick={() => salvarAjusteMeta(variacoes)} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-black py-3 rounded-xl uppercase text-[10px] flex items-center justify-center gap-2 shadow-md transition-colors">
+                          <Save size={14} /> Salvar Alertas
                         </button>
                       </div>
                     )}
